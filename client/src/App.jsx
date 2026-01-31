@@ -7,6 +7,7 @@ import { createDrawingDebouncer } from './utils/drawingSync.jsx';
 import { RoomManager } from './utils/roomManager.jsx';
 import { HistoryManager } from './utils/historyManager.jsx';
 import { UserCursorManager } from './utils/userCursorManager.jsx';
+import { ActionSequencer, CanvasStateValidator } from './utils/conflictResolver.jsx';
 
 function App() {
   const canvasRef = useRef(null);
@@ -16,6 +17,8 @@ function App() {
   const historyManager = useRef(null);
   const userCursorManager = useRef(null);
   const cursorPositionDebouncer = useRef(null);
+  const actionSequencer = useRef(null);
+  const stateValidator = useRef(null);
 
   // Drawing state
   const [currentTool, setCurrentTool] = useState('brush');
@@ -115,6 +118,8 @@ function App() {
           socketService,
           drawingRef.current.cursorOverlayCanvas
         );
+        actionSequencer.current = new ActionSequencer();
+        stateValidator.current = new CanvasStateValidator();
 
         // Set cursor manager in canvas
         if (drawingRef.current) {
@@ -213,8 +218,52 @@ function App() {
         // Handle remote drawing strokes
         socketService.on('Draw', (data) => {
           if (drawingRef.current && data.userId !== newUserId) {
-            // Apply remote stroke to canvas
-            drawingRef.current.applyRemoteStroke(data.action.data);
+            // Create action object for conflict detection
+            const action = {
+              type: 'stroke',
+              userId: data.userId,
+              timestamp: data.timestamp || Date.now(),
+              id: data.action?.id,
+              data: data.action.data,
+            };
+
+            // Enqueue action for processing
+            if (actionSequencer.current) {
+              actionSequencer.current.enqueueAction(action);
+              
+              // Process queue to detect and resolve conflicts
+              const processed = actionSequencer.current.processQueue();
+
+              // Apply processed actions to canvas
+              processed.actions.forEach((processedAction) => {
+                if (processedAction.resolution !== 'REJECTED') {
+                  drawingRef.current.applyRemoteStroke(processedAction.data);
+                }
+              });
+
+              // Record state checkpoint after drawing
+              if (stateValidator.current) {
+                stateValidator.current.recordCheckpoint({
+                  timestamp: Date.now(),
+                  actions: processed.actions,
+                  hasConflicts: processed.conflicts.length > 0,
+                });
+              }
+
+              // If rebuild needed, clear and replay all strokes
+              if (actionSequencer.current.needsRebuild()) {
+                console.log('[App] Rebuilding canvas due to conflicts');
+                drawingRef.current.clearCanvas();
+                
+                const actionsToReplay = actionSequencer.current.getActionsToReplay();
+                actionsToReplay.forEach((replayAction) => {
+                  drawingRef.current.applyRemoteStroke(replayAction.data);
+                });
+              }
+            } else {
+              // Fallback: apply stroke directly if sequencer not initialized
+              drawingRef.current.applyRemoteStroke(data.action.data);
+            }
           }
         });
 
@@ -234,7 +283,47 @@ function App() {
 
         socketService.on('Clear', (data) => {
           if (drawingRef.current && data.userId !== newUserId) {
-            drawingRef.current.clearCanvas();
+            // Create clear action for conflict detection
+            const clearAction = {
+              type: 'clear',
+              userId: data.userId,
+              timestamp: data.timestamp || Date.now(),
+              id: data.id,
+            };
+
+            // Enqueue and process clear action
+            if (actionSequencer.current) {
+              actionSequencer.current.enqueueAction(clearAction);
+              const processed = actionSequencer.current.processQueue();
+
+              // Apply clear if not rejected
+              if (processed.actions.length > 0 && processed.actions[0].resolution !== 'REJECTED') {
+                drawingRef.current.clearCanvas();
+
+                // Record state checkpoint
+                if (stateValidator.current) {
+                  stateValidator.current.recordCheckpoint({
+                    timestamp: Date.now(),
+                    actions: processed.actions,
+                    hasConflicts: processed.conflicts.length > 0,
+                  });
+                }
+
+                // Rebuild canvas if needed
+                if (actionSequencer.current.needsRebuild()) {
+                  console.log('[App] Rebuilding canvas after clear due to conflicts');
+                  const actionsToReplay = actionSequencer.current.getActionsToReplay();
+                  actionsToReplay.forEach((replayAction) => {
+                    if (replayAction.type === 'stroke') {
+                      drawingRef.current.applyRemoteStroke(replayAction.data);
+                    }
+                  });
+                }
+              }
+            } else {
+              // Fallback: clear directly if sequencer not initialized
+              drawingRef.current.clearCanvas();
+            }
             console.log('[App] Canvas cleared by remote user');
           }
         });
