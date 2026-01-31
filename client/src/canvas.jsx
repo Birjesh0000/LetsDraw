@@ -23,9 +23,16 @@ class CanvasDrawing {
     this.pendingActions = [];
     this.isProcessingActions = false;
 
+    // Stroke tracking for synchronization
+    this.currentStroke = null;
+    this.strokeBuffer = [];
+    this.isStrokeInProgress = false;
+
     // Initialize canvas
     this.setupCanvas();
     this.setupEventListeners();
+
+    console.log('[Canvas] Initialized');
   }
 
   /**
@@ -78,18 +85,28 @@ class CanvasDrawing {
   }
 
   /**
-   * Handle mouse down event
+   * Handle mouse down event - start new stroke
    */
   handleMouseDown(e) {
     this.isDrawing = true;
+    this.isStrokeInProgress = true;
 
     const { x, y } = this.getMousePosition(e);
     this.lastX = x;
     this.lastY = y;
+
+    // Start new stroke tracking
+    this.currentStroke = {
+      tool: this.currentTool,
+      color: this.currentColor,
+      size: this.currentSize,
+      points: [{ x, y }],
+      startTime: Date.now(),
+    };
   }
 
   /**
-   * Handle mouse move event
+   * Handle mouse move event - draw and track stroke
    */
   handleMouseMove(e) {
     if (!this.isDrawing) return;
@@ -99,26 +116,57 @@ class CanvasDrawing {
     // Draw stroke from last position to current
     this.draw(this.lastX, this.lastY, x, y);
 
+    // Track point in current stroke
+    if (this.currentStroke) {
+      this.currentStroke.points.push({ x, y });
+    }
+
     // Update last position
     this.lastX = x;
     this.lastY = y;
 
-    // Emit local drawing event for WebSocket sending
-    this.emitDrawAction(this.lastX, this.lastY);
+    // Emit drawing event for synchronization
+    this.emitDrawAction({
+      tool: this.currentTool,
+      x,
+      y,
+      color: this.currentColor,
+      size: this.currentSize,
+    });
   }
 
   /**
-   * Handle mouse up event
+   * Handle mouse up event - end stroke
    */
   handleMouseUp(e) {
     this.isDrawing = false;
+
+    // Finalize stroke and add to buffer
+    if (this.currentStroke && this.currentStroke.points.length > 0) {
+      this.currentStroke.endTime = Date.now();
+      this.currentStroke.duration = this.currentStroke.endTime - this.currentStroke.startTime;
+      this.strokeBuffer.push(this.currentStroke);
+
+      console.log(`[Canvas] Stroke completed: ${this.currentStroke.points.length} points`);
+    }
+
+    this.isStrokeInProgress = false;
+    this.currentStroke = null;
   }
 
   /**
-   * Handle mouse leave event
+   * Handle mouse leave event - end stroke
    */
   handleMouseLeave(e) {
     this.isDrawing = false;
+
+    // Finalize stroke if in progress
+    if (this.isStrokeInProgress && this.currentStroke) {
+      this.currentStroke.endTime = Date.now();
+      this.strokeBuffer.push(this.currentStroke);
+    }
+
+    this.isStrokeInProgress = false;
   }
 
   /**
@@ -221,43 +269,48 @@ class CanvasDrawing {
 
   /**
    * Emit draw action for WebSocket transmission
-   * Called internally - subscribe to drawAction callback
+   * Called during drawing - subscribe to onDraw callback
    */
-  emitDrawAction(x, y) {
+  emitDrawAction(strokeData) {
     if (this.onDraw) {
-      this.onDraw({
-        tool: this.currentTool,
-        x,
-        y,
-        color: this.currentColor,
-        size: this.currentSize,
-      });
+      this.onDraw(strokeData);
     }
   }
 
   /**
    * Apply a remote drawing stroke
    * Called when receiving drawing from other users
+   * Renders stroke efficiently without rebuilding entire canvas
    */
   applyRemoteStroke(strokeData) {
+    if (!strokeData) return;
+
+    // Set up context for remote stroke
+    this.ctx.globalCompositeOperation = 'source-over';
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    this.ctx.imageSmoothingEnabled = true;
+
     if (strokeData.tool === 'brush') {
       this.ctx.strokeStyle = strokeData.color;
       this.ctx.lineWidth = strokeData.size;
-      this.ctx.globalCompositeOperation = 'source-over';
-      this.ctx.lineCap = 'round';
-      this.ctx.lineJoin = 'round';
 
+      // Draw a small circle at the point (since we receive individual points)
       this.ctx.beginPath();
       this.ctx.arc(strokeData.x, strokeData.y, strokeData.size / 2, 0, Math.PI * 2);
       this.ctx.fill();
     } else if (strokeData.tool === 'eraser') {
       this.ctx.globalCompositeOperation = 'destination-out';
+
+      // Erase a small area
       this.ctx.clearRect(
         strokeData.x - strokeData.size / 2,
         strokeData.y - strokeData.size / 2,
         strokeData.size,
         strokeData.size
       );
+
+      // Reset composite operation
       this.ctx.globalCompositeOperation = 'source-over';
     }
   }
@@ -358,7 +411,7 @@ class CanvasDrawing {
   }
 
   /**
-   * Get canvas state
+   * Get current stroke state
    */
   getState() {
     return {
@@ -366,7 +419,27 @@ class CanvasDrawing {
       color: this.currentColor,
       size: this.currentSize,
       isDrawing: this.isDrawing,
+      isStrokeInProgress: this.isStrokeInProgress,
+      strokeBufferSize: this.strokeBuffer.length,
     };
+  }
+
+  /**
+   * Get and clear stroke buffer
+   */
+  getStrokeBuffer() {
+    const buffer = this.strokeBuffer;
+    this.strokeBuffer = [];
+    return buffer;
+  }
+
+  /**
+   * Clear stroke buffer without returning
+   */
+  clearStrokeBuffer() {
+    const size = this.strokeBuffer.length;
+    this.strokeBuffer = [];
+    return size;
   }
 
   /**

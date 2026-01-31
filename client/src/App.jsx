@@ -3,10 +3,12 @@ import Toolbar from './Toolbar';
 import ConnectionStatus from './ConnectionStatus';
 import CanvasDrawing from './canvas.jsx';
 import socketService from './socketService.jsx';
+import { createDrawingDebouncer } from './utils/drawingSync.jsx';
 
 function App() {
   const canvasRef = useRef(null);
   const drawingRef = useRef(null);
+  const drawDebouncer = useRef(null);
 
   // Drawing state
   const [currentTool, setCurrentTool] = useState('brush');
@@ -35,13 +37,23 @@ function App() {
     drawing.setColor(currentColor);
     drawing.setSize(currentSize);
 
-    // Setup draw callback for sending to server
-    drawing.onDraw = (strokeData) => {
+    // Create debouncer for drawing events
+    drawDebouncer.current = createDrawingDebouncer((strokeData) => {
       socketService.sendDraw(strokeData);
+    }, 16); // ~60fps batching
+
+    // Setup draw callback - use debouncer
+    drawing.onDraw = (strokeData) => {
+      if (drawDebouncer.current) {
+        drawDebouncer.current.send(strokeData);
+      }
     };
 
     return () => {
-      // Cleanup
+      // Flush pending draws on cleanup
+      if (drawDebouncer.current) {
+        drawDebouncer.current.flush();
+      }
       drawing.clearCanvas();
     };
   }, []);
@@ -78,6 +90,16 @@ function App() {
 
           console.log('Joined room:', data.roomId);
         });
+
+        // Handle remote drawing strokes
+        socketService.on('Draw', (data) => {
+          if (drawingRef.current && data.userId !== newUserId) {
+            // Apply remote stroke to canvas
+            drawingRef.current.applyRemoteStroke(data.action.data);
+            console.log(`[App] Applied remote stroke from ${data.userId}`);
+          }
+        });
+
 
         socketService.on('Draw', (data) => {
           if (drawingRef.current && data.userId !== newUserId) {
