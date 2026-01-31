@@ -25,3 +25,8 @@ temp/
 *.sublime-project
 *.sublime-workspace
 Notes.md
+
+# Local Documentation Files (not tracked)
+DEVELOPMENT.md
+DOCUMENTATION_SUMMARY.md
+DOCUMENTATION_INDEX.md
