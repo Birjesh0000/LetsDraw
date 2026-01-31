@@ -4,11 +4,13 @@ import ConnectionStatus from './ConnectionStatus';
 import CanvasDrawing from './canvas.jsx';
 import socketService from './socketService.jsx';
 import { createDrawingDebouncer } from './utils/drawingSync.jsx';
+import { RoomManager } from './utils/roomManager.jsx';
 
 function App() {
   const canvasRef = useRef(null);
   const drawingRef = useRef(null);
   const drawDebouncer = useRef(null);
+  const roomManager = useRef(null);
 
   // Drawing state
   const [currentTool, setCurrentTool] = useState('brush');
@@ -20,6 +22,7 @@ function App() {
   const [users, setUsers] = useState([]);
   const [userId, setUserId] = useState(null);
   const [roomId, setRoomId] = useState('default-room');
+  const [isJoiningRoom, setIsJoiningRoom] = useState(false);
 
   // History state
   const [canUndo, setCanUndo] = useState(false);
@@ -58,37 +61,68 @@ function App() {
     };
   }, []);
 
-  // Initialize WebSocket connection
+  // Initialize WebSocket connection and room joining
   useEffect(() => {
-    const initializeSocket = async () => {
+    const initializeApp = async () => {
       try {
-        // Connect to server
+        console.log('[App] Initializing application...');
+
+        // Step 1: Connect to WebSocket server
+        console.log('[App] Step 1: Connecting to server...');
         const newUserId = await socketService.connect();
         setUserId(newUserId);
 
-        // Setup socket callbacks
-        socketService.on('Connect', () => {
-          setIsConnected(true);
-          console.log('Connected to server');
-        });
+        // Step 2: Initialize room manager
+        console.log('[App] Step 2: Initializing room manager...');
+        roomManager.current = new RoomManager(socketService);
 
-        socketService.on('Disconnect', () => {
-          setIsConnected(false);
-          setUsers([]);
-          console.log('Disconnected from server');
-        });
-
-        socketService.on('RoomJoined', (data) => {
+        // Setup room manager callbacks
+        roomManager.current.on('RoomJoined', (data) => {
+          console.log('[App] Room joined event received');
           setUsers(data.users || []);
+          setRoomId(data.roomId);
           setCanUndo(false);
           setCanRedo(false);
 
           // Render initial history on canvas
           if (data.history && drawingRef.current) {
+            console.log(
+              `[App] Rendering initial history: ${data.history.length} actions`
+            );
             drawingRef.current.renderFromHistory(data.history);
           }
+        });
 
-          console.log('Joined room:', data.roomId);
+        roomManager.current.on('UsersUpdated', (updatedUsers) => {
+          console.log(`[App] Users list updated: ${updatedUsers.length} users`);
+          setUsers(updatedUsers);
+        });
+
+        roomManager.current.on('JoinAttempt', (attempt) => {
+          console.log(`[App] Join attempt ${attempt}`);
+          setIsJoiningRoom(true);
+        });
+
+        roomManager.current.on('RoomError', (error) => {
+          console.error('[App] Room error:', error);
+          setIsJoiningRoom(false);
+        });
+
+        // Setup socket callbacks for drawing and other events
+        socketService.on('Connect', () => {
+          setIsConnected(true);
+          console.log('[App] Socket connected');
+        });
+
+        socketService.on('Disconnect', () => {
+          setIsConnected(false);
+          setUsers([]);
+          console.log('[App] Socket disconnected');
+        });
+
+        socketService.on('ReconnectFailed', () => {
+          console.error('[App] Reconnection failed');
+          setIsConnected(false);
         });
 
         // Handle remote drawing strokes
@@ -96,66 +130,71 @@ function App() {
           if (drawingRef.current && data.userId !== newUserId) {
             // Apply remote stroke to canvas
             drawingRef.current.applyRemoteStroke(data.action.data);
-            console.log(`[App] Applied remote stroke from ${data.userId}`);
-          }
-        });
-
-
-        socketService.on('Draw', (data) => {
-          if (drawingRef.current && data.userId !== newUserId) {
-            drawingRef.current.applyRemoteStroke(data.action.data);
           }
         });
 
         socketService.on('Undo', (data) => {
           if (drawingRef.current) {
+            console.log('[App] Undo received');
             // Rebuild canvas from current history
             // (will be implemented when we receive updated history)
-            console.log('Undo received');
           }
         });
 
         socketService.on('Redo', (data) => {
           if (drawingRef.current) {
-            console.log('Redo received');
+            console.log('[App] Redo received');
           }
         });
 
         socketService.on('Clear', (data) => {
           if (drawingRef.current && data.userId !== newUserId) {
             drawingRef.current.clearCanvas();
+            console.log('[App] Canvas cleared by remote user');
           }
         });
 
         socketService.on('UserJoined', (data) => {
-          setUsers((prevUsers) => [...prevUsers, data.user]);
-          console.log('User joined:', data.user.name);
+          console.log(`[App] User joined: ${data.user.name}`);
+          if (roomManager.current) {
+            roomManager.current.handleUserJoined(data.user);
+          }
         });
 
         socketService.on('UserLeft', (data) => {
-          setUsers((prevUsers) =>
-            prevUsers.filter((u) => u.id !== data.userId)
-          );
-          console.log('User left');
+          console.log(`[App] User left: ${data.userId}`);
+          if (roomManager.current) {
+            roomManager.current.handleUserLeft(data.userId);
+          }
         });
 
-        socketService.on('Error', (error) => {
-          console.error('Socket error:', error);
-        });
-
-        // Join room after connection
-        socketService.joinRoom(roomId, {
+        // Step 3: Join the room
+        console.log(`[App] Step 3: Joining room "${roomId}"...`);
+        setIsJoiningRoom(true);
+        const joinSuccess = await roomManager.current.joinRoom(roomId, {
           name: `User-${newUserId.slice(0, 5)}`,
         });
+
+        if (joinSuccess) {
+          console.log('[App] Successfully joined room');
+          setIsJoiningRoom(false);
+        } else {
+          console.error('[App] Failed to join room');
+          setIsJoiningRoom(false);
+        }
       } catch (error) {
-        console.error('Failed to connect:', error);
+        console.error('[App] Initialization error:', error);
+        setIsConnected(false);
       }
     };
 
-    initializeSocket();
+    initializeApp();
 
     // Cleanup on unmount
     return () => {
+      if (roomManager.current) {
+        roomManager.current.leaveRoom();
+      }
       socketService.disconnect();
     };
   }, [roomId]);
@@ -219,6 +258,14 @@ function App() {
           </p>
         </div>
       </header>
+
+      {/* Loading Indicator */}
+      {isJoiningRoom && (
+        <div className="bg-info text-white px-4 py-3 text-center font-medium">
+          <span className="inline-block mr-2">🔄</span>
+          Joining room...
+        </div>
+      )}
 
       {/* Connection Status Bar */}
       <ConnectionStatus
