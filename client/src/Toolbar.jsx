@@ -16,6 +16,7 @@ function Toolbar({
   canRedo,
   onRedo,
   isConnected,
+  isUndoRedoPending = false,
 }) {
   const toolButtonClass = (tool) =>
     `px-4 py-2 rounded font-semibold transition-all ${
@@ -104,7 +105,7 @@ function Toolbar({
             'bg-amber-500 border-amber-400 hover:bg-amber-600 hover:shadow-md hover:-translate-y-0.5'
           )}
           onClick={onUndo}
-          disabled={!canUndo || !isConnected}
+          disabled={!canUndo || !isConnected || isUndoRedoPending}
           title="Undo (Ctrl+Z)"
         >
           ↶ Undo
@@ -114,7 +115,7 @@ function Toolbar({
             'bg-amber-500 border-amber-400 hover:bg-amber-600 hover:shadow-md hover:-translate-y-0.5'
           )}
           onClick={onRedo}
-          disabled={!canRedo || !isConnected}
+          disabled={!canRedo || !isConnected || isUndoRedoPending}
           title="Redo (Ctrl+Y)"
         >
           ↷ Redo

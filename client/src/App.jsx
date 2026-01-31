@@ -5,12 +5,14 @@ import CanvasDrawing from './canvas.jsx';
 import socketService from './socketService.jsx';
 import { createDrawingDebouncer } from './utils/drawingSync.jsx';
 import { RoomManager } from './utils/roomManager.jsx';
+import { HistoryManager } from './utils/historyManager.jsx';
 
 function App() {
   const canvasRef = useRef(null);
   const drawingRef = useRef(null);
   const drawDebouncer = useRef(null);
   const roomManager = useRef(null);
+  const historyManager = useRef(null);
 
   // Drawing state
   const [currentTool, setCurrentTool] = useState('brush');
@@ -27,6 +29,7 @@ function App() {
   // History state
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const [isUndoRedoPending, setIsUndoRedoPending] = useState(false);
 
   // Initialize canvas
   useEffect(() => {
@@ -72,17 +75,57 @@ function App() {
         const newUserId = await socketService.connect();
         setUserId(newUserId);
 
-        // Step 2: Initialize room manager
-        console.log('[App] Step 2: Initializing room manager...');
+        // Step 2: Initialize room manager and history manager
+        console.log('[App] Step 2: Initializing managers...');
         roomManager.current = new RoomManager(socketService);
+        historyManager.current = new HistoryManager(socketService);
+
+        // Setup history manager callbacks
+        historyManager.current.on('can-undo-changed', (canUndo) => {
+          setCanUndo(canUndo);
+          console.log(`[App] Can undo: ${canUndo}`);
+        });
+
+        historyManager.current.on('can-redo-changed', (canRedo) => {
+          setCanRedo(canRedo);
+          console.log(`[App] Can redo: ${canRedo}`);
+        });
+
+        historyManager.current.on('undo-complete', (data) => {
+          setIsUndoRedoPending(false);
+          // Re-render canvas from history
+          if (data && data.history && drawingRef.current) {
+            console.log('[App] Rendering canvas after undo');
+            drawingRef.current.clearCanvas();
+            drawingRef.current.renderFromHistory(data.history);
+          }
+        });
+
+        historyManager.current.on('redo-complete', (data) => {
+          setIsUndoRedoPending(false);
+          // Re-render canvas from history
+          if (data && data.history && drawingRef.current) {
+            console.log('[App] Rendering canvas after redo');
+            drawingRef.current.clearCanvas();
+            drawingRef.current.renderFromHistory(data.history);
+          }
+        });
+
+        historyManager.current.on('history-error', (error) => {
+          console.error('[App] History error:', error);
+          setIsUndoRedoPending(false);
+        });
 
         // Setup room manager callbacks
         roomManager.current.on('RoomJoined', (data) => {
           console.log('[App] Room joined event received');
           setUsers(data.users || []);
           setRoomId(data.roomId);
-          setCanUndo(false);
-          setCanRedo(false);
+
+          // Update history state from initial room data
+          if (data.canUndo !== undefined || data.canRedo !== undefined) {
+            historyManager.current.updateHistoryState(data);
+          }
 
           // Render initial history on canvas
           if (data.history && drawingRef.current) {
@@ -95,6 +138,7 @@ function App() {
 
         roomManager.current.on('UsersUpdated', (updatedUsers) => {
           console.log(`[App] Users list updated: ${updatedUsers.length} users`);
+
           setUsers(updatedUsers);
         });
 
@@ -134,16 +178,16 @@ function App() {
         });
 
         socketService.on('Undo', (data) => {
-          if (drawingRef.current) {
-            console.log('[App] Undo received');
-            // Rebuild canvas from current history
-            // (will be implemented when we receive updated history)
+          console.log('[App] Undo event received');
+          if (historyManager.current) {
+            historyManager.current.handleUndoResponse(data);
           }
         });
 
         socketService.on('Redo', (data) => {
-          if (drawingRef.current) {
-            console.log('[App] Redo received');
+          console.log('[App] Redo event received');
+          if (historyManager.current) {
+            historyManager.current.handleRedoResponse(data);
           }
         });
 
@@ -239,12 +283,28 @@ function App() {
     }
   };
 
-  const handleUndo = () => {
-    socketService.requestUndo();
+  const handleUndo = async () => {
+    if (!historyManager.current || !canUndo) return;
+
+    console.log('[App] Undo requested');
+    setIsUndoRedoPending(true);
+    const success = await historyManager.current.requestUndo();
+
+    if (!success) {
+      setIsUndoRedoPending(false);
+    }
   };
 
-  const handleRedo = () => {
-    socketService.requestRedo();
+  const handleRedo = async () => {
+    if (!historyManager.current || !canRedo) return;
+
+    console.log('[App] Redo requested');
+    setIsUndoRedoPending(true);
+    const success = await historyManager.current.requestRedo();
+
+    if (!success) {
+      setIsUndoRedoPending(false);
+    }
   };
 
   return (
@@ -288,6 +348,7 @@ function App() {
         canRedo={canRedo}
         onRedo={handleRedo}
         isConnected={isConnected}
+        isUndoRedoPending={isUndoRedoPending}
       />
 
       {/* Canvas Area */}
