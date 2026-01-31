@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Toolbar from './Toolbar';
 import ConnectionStatus from './ConnectionStatus';
 import CanvasDrawing from './canvas.jsx';
+import PerformanceMonitor from './PerformanceMonitor.jsx';
 import socketService from './socketService.jsx';
 import { createDrawingDebouncer } from './utils/drawingSync.jsx';
 import { RoomManager } from './utils/roomManager.jsx';
@@ -36,6 +37,9 @@ function App() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [isUndoRedoPending, setIsUndoRedoPending] = useState(false);
+
+  // Performance monitoring state (disabled by default, enable with Ctrl+Shift+P)
+  const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(false);
 
   // Initialize canvas
   useEffect(() => {
@@ -84,7 +88,16 @@ function App() {
       }
     };
 
+    // Keyboard handler for performance monitor toggle (Ctrl+Shift+P)
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyP') {
+        e.preventDefault();
+        setShowPerformanceMonitor((prev) => !prev);
+      }
+    };
+
     drawing.canvas.addEventListener('mousemove', handleCanvasMouseMove);
+    document.addEventListener('keydown', handleKeyDown);
 
     return () => {
       // Flush pending draws on cleanup
@@ -95,6 +108,7 @@ function App() {
         cursorPositionDebouncer.current.flush();
       }
       drawing.canvas.removeEventListener('mousemove', handleCanvasMouseMove);
+      document.removeEventListener('keydown', handleKeyDown);
       drawing.clearCanvas();
     };
   }, []);
@@ -437,26 +451,26 @@ function App() {
     }
   }, [currentSize]);
 
-  const handleToolChange = (tool) => {
+  const handleToolChange = useCallback((tool) => {
     setCurrentTool(tool);
-  };
+  }, []);
 
-  const handleColorChange = (color) => {
+  const handleColorChange = useCallback((color) => {
     setCurrentColor(color);
-  };
+  }, []);
 
-  const handleSizeChange = (size) => {
+  const handleSizeChange = useCallback((size) => {
     setCurrentSize(size);
-  };
+  }, []);
 
-  const handleClear = () => {
+  const handleClear = useCallback(() => {
     if (drawingRef.current) {
       drawingRef.current.clearCanvas();
       socketService.requestClear();
     }
-  };
+  }, []);
 
-  const handleUndo = async () => {
+  const handleUndo = useCallback(async () => {
     if (!historyManager.current || !canUndo) return;
 
     console.log('[App] Undo requested');
@@ -466,9 +480,9 @@ function App() {
     if (!success) {
       setIsUndoRedoPending(false);
     }
-  };
+  }, [canUndo]);
 
-  const handleRedo = async () => {
+  const handleRedo = useCallback(async () => {
     if (!historyManager.current || !canRedo) return;
 
     console.log('[App] Redo requested');
@@ -478,7 +492,7 @@ function App() {
     if (!success) {
       setIsUndoRedoPending(false);
     }
-  };
+  }, [canRedo]);
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
@@ -541,6 +555,9 @@ function App() {
           Users: <span className="font-semibold text-gray-300">{users.length}</span>
         </p>
       </footer>
+
+      {/* Performance Monitor (toggle with Ctrl+Shift+P) */}
+      <PerformanceMonitor canvas={drawingRef.current} isVisible={showPerformanceMonitor} />
     </div>
   );
 }

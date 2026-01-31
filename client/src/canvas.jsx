@@ -4,6 +4,8 @@
  * No external drawing libraries - raw canvas only
  */
 
+import { DirtyRectangleRenderer, RenderScheduler } from './utils/performanceOptimizer.jsx';
+
 class CanvasDrawing {
   constructor(canvasElement) {
     this.canvas = canvasElement;
@@ -22,6 +24,8 @@ class CanvasDrawing {
     // Performance optimization
     this.pendingActions = [];
     this.isProcessingActions = false;
+    this.dirtyRectRenderer = new DirtyRectangleRenderer(this.canvas, this.ctx);
+    this.renderScheduler = new RenderScheduler();
 
     // Stroke tracking for synchronization
     this.currentStroke = null;
@@ -303,6 +307,21 @@ class CanvasDrawing {
     this.ctx.lineTo(toX, toY);
     this.ctx.stroke();
     this.ctx.closePath();
+
+    // Mark region as dirty for optimized rendering
+    const padding = this.currentSize / 2 + 2;
+    const minX = Math.min(fromX, toX);
+    const minY = Math.min(fromY, toY);
+    const maxX = Math.max(fromX, toX);
+    const maxY = Math.max(fromY, toY);
+
+    this.dirtyRectRenderer.markDirty(
+      minX,
+      minY,
+      maxX - minX + this.currentSize,
+      maxY - minY + this.currentSize,
+      padding
+    );
   }
 
   /**
@@ -321,6 +340,21 @@ class CanvasDrawing {
 
     // Reset composite operation
     this.ctx.globalCompositeOperation = 'source-over';
+
+    // Mark region as dirty for optimized rendering
+    const padding = this.currentSize / 2 + 2;
+    const minX = Math.min(fromX, toX);
+    const minY = Math.min(fromY, toY);
+    const maxX = Math.max(fromX, toX);
+    const maxY = Math.max(fromY, toY);
+
+    this.dirtyRectRenderer.markDirty(
+      minX,
+      minY,
+      maxX - minX + this.currentSize,
+      maxY - minY + this.currentSize,
+      padding
+    );
   }
 
   /**
@@ -355,6 +389,15 @@ class CanvasDrawing {
       this.ctx.beginPath();
       this.ctx.arc(strokeData.x, strokeData.y, strokeData.size / 2, 0, Math.PI * 2);
       this.ctx.fill();
+
+      // Mark region as dirty
+      this.dirtyRectRenderer.markDirty(
+        strokeData.x - strokeData.size / 2,
+        strokeData.y - strokeData.size / 2,
+        strokeData.size,
+        strokeData.size,
+        2
+      );
     } else if (strokeData.tool === 'eraser') {
       this.ctx.globalCompositeOperation = 'destination-out';
 
@@ -368,6 +411,15 @@ class CanvasDrawing {
 
       // Reset composite operation
       this.ctx.globalCompositeOperation = 'source-over';
+
+      // Mark region as dirty
+      this.dirtyRectRenderer.markDirty(
+        strokeData.x - strokeData.size / 2,
+        strokeData.y - strokeData.size / 2,
+        strokeData.size,
+        strokeData.size,
+        2
+      );
     }
   }
 
@@ -526,6 +578,34 @@ class CanvasDrawing {
     }
 
     console.log(`[Canvas] Resized to ${this.canvas.width}x${this.canvas.height}`);
+  }
+
+  /**
+   * Get dirty rectangles from renderer
+   */
+  getDirtyRects() {
+    return this.dirtyRectRenderer.getDirtyRects();
+  }
+
+  /**
+   * Get current FPS
+   */
+  getFPS() {
+    return this.dirtyRectRenderer.getFPS();
+  }
+
+  /**
+   * Track render frame for performance monitoring
+   */
+  trackFrame() {
+    return this.dirtyRectRenderer.trackFrame();
+  }
+
+  /**
+   * Enable/disable dirty rectangle optimization
+   */
+  setDirtyRectOptimization(enabled) {
+    this.dirtyRectRenderer.setOptimizationEnabled(enabled);
   }
 }
 

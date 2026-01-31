@@ -1,9 +1,12 @@
 /**
  * Toolbar Component
  * Provides all drawing controls: tools, colors, size, actions
+ * Optimized with React.memo and memoized class functions
  */
 
-function Toolbar({
+import { memo, useMemo } from 'react';
+
+const Toolbar = memo(function Toolbar({
   currentTool,
   onToolChange,
   currentColor,
@@ -18,15 +21,22 @@ function Toolbar({
   isConnected,
   isUndoRedoPending = false,
 }) {
-  const toolButtonClass = (tool) =>
-    `px-4 py-2 rounded font-semibold transition-all ${
-      currentTool === tool
-        ? 'bg-green-500 border-2 border-green-600 shadow-lg shadow-green-500/50'
-        : 'bg-blue-500 border-2 border-blue-400 hover:bg-blue-600 hover:shadow-md hover:-translate-y-0.5'
-    } text-white disabled:opacity-50 disabled:cursor-not-allowed`;
+  // Memoize class functions to avoid recreation on each render
+  const toolButtonClass = useMemo(
+    () => (tool) =>
+      `px-4 py-2 rounded font-semibold transition-all ${
+        currentTool === tool
+          ? 'bg-green-500 border-2 border-green-600 shadow-lg shadow-green-500/50'
+          : 'bg-blue-500 border-2 border-blue-400 hover:bg-blue-600 hover:shadow-md hover:-translate-y-0.5'
+      } text-white disabled:opacity-50 disabled:cursor-not-allowed`,
+    [currentTool]
+  );
 
-  const actionButtonClass = (baseColor) =>
-    `px-4 py-2 rounded font-semibold transition-all border-2 text-white disabled:opacity-40 disabled:cursor-not-allowed ${baseColor}`;
+  const actionButtonClass = useMemo(
+    () => (baseColor) =>
+      `px-4 py-2 rounded font-semibold transition-all border-2 text-white disabled:opacity-40 disabled:cursor-not-allowed ${baseColor}`,
+    []
+  );
 
   return (
     <div className="bg-gradient-to-r from-primary to-secondary text-white px-6 py-4 shadow-lg flex flex-wrap items-center gap-6">
@@ -138,6 +148,6 @@ function Toolbar({
       </button>
     </div>
   );
-}
+});
 
 export default Toolbar;
