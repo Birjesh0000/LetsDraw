@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Toolbar from './Toolbar';
 import ConnectionStatus from './ConnectionStatus';
+import ConnectionIndicator from './ConnectionIndicator.jsx';
 import CanvasDrawing from './canvas.jsx';
 import PerformanceMonitor from './PerformanceMonitor.jsx';
+import NotificationContainer from './NotificationContainer.jsx';
 import socketService from './socketService.jsx';
 import { createDrawingDebouncer } from './utils/drawingSync.jsx';
 import { RoomManager } from './utils/roomManager.jsx';
@@ -40,6 +42,18 @@ function App() {
 
   // Performance monitoring state (disabled by default, enable with Ctrl+Shift+P)
   const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(false);
+
+  // Error handling and notifications
+  const [notifications, setNotifications] = useState([]);
+  const [connectionHealth, setConnectionHealth] = useState({
+    isHealthy: true,
+    latency: 0,
+  });
+  const [reconnectStatus, setReconnectStatus] = useState({
+    isAttemptingReconnect: false,
+    attempts: 0,
+    maxAttempts: 10,
+  });
 
   // Initialize canvas
   useEffect(() => {
@@ -119,6 +133,43 @@ function App() {
       try {
         console.log('[App] Initializing application...');
 
+        // Setup error notification system
+        const errorManager = socketService.getErrorManager();
+        errorManager.on('notificationAdded', (notification) => {
+          setNotifications((prev) => [...prev, notification]);
+        });
+
+        errorManager.on('notificationRemoved', (id) => {
+          setNotifications((prev) => prev.filter((n) => n.id !== id));
+        });
+
+        // Setup connection health monitoring
+        const healthMonitor = socketService.healthMonitor;
+        healthMonitor.on('healthStatusChanged', (status) => {
+          setConnectionHealth({
+            isHealthy: status.isHealthy,
+            latency: status.latency,
+          });
+        });
+
+        // Setup reconnection monitoring
+        const reconnectionManager = socketService.reconnectionManager;
+        reconnectionManager.on('reconnectAttempt', (status) => {
+          setReconnectStatus({
+            isAttemptingReconnect: true,
+            attempts: status.attempt,
+            maxAttempts: status.maxAttempts,
+          });
+        });
+
+        reconnectionManager.on('reconnectSuccess', () => {
+          setReconnectStatus({
+            isAttemptingReconnect: false,
+            attempts: 0,
+            maxAttempts: 10,
+          });
+        });
+
         // Step 1: Connect to WebSocket server
         console.log('[App] Step 1: Connecting to server...');
         const newUserId = await socketService.connect();
@@ -144,6 +195,7 @@ function App() {
         historyManager.current.on('can-undo-changed', (canUndo) => {
           setCanUndo(canUndo);
           console.log(`[App] Can undo: ${canUndo}`);
+
         });
 
         historyManager.current.on('can-redo-changed', (canRedo) => {
@@ -496,13 +548,30 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
+      {/* Notification Container */}
+      <NotificationContainer
+        notifications={notifications}
+        onDismiss={(id) => {
+          socketService.getErrorManager().dismissNotification(id);
+        }}
+      />
+
       {/* Header */}
       <header className="bg-gradient-to-r from-primary to-secondary text-white px-6 py-4 shadow-lg">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="text-3xl font-bold tracking-wider">LetsDraw</h1>
-          <p className="text-gray-300 text-sm font-light mt-1">
-            Collaborative Drawing Canvas
-          </p>
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-wider">LetsDraw</h1>
+            <p className="text-gray-300 text-sm font-light mt-1">
+              Collaborative Drawing Canvas
+            </p>
+          </div>
+          <ConnectionIndicator
+            isConnected={isConnected}
+            isReconnecting={reconnectStatus.isAttemptingReconnect}
+            reconnectAttempt={reconnectStatus.attempts}
+            maxReconnectAttempts={reconnectStatus.maxAttempts}
+            connectionHealth={connectionHealth}
+          />
         </div>
       </header>
 

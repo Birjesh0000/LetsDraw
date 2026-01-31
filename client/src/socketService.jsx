@@ -5,6 +5,12 @@
  */
 
 import io from 'socket.io-client';
+import {
+  ErrorNotificationManager,
+  ReconnectionManager,
+  StateRecoveryManager,
+  ConnectionHealthMonitor,
+} from './utils/errorHandler.jsx';
 
 class SocketService {
   constructor(serverUrl = 'http://localhost:3001') {
@@ -24,6 +30,17 @@ class SocketService {
     this.isProcessingQueue = false;
     this.queueFlushInterval = 16; // ~60fps
 
+    // Error handling and recovery managers
+    this.errorManager = new ErrorNotificationManager();
+    this.reconnectionManager = new ReconnectionManager({
+      maxAttempts: 10,
+      baseDelay: 1000,
+      maxDelay: 30000,
+      backoffMultiplier: 1.5,
+    });
+    this.stateRecoveryManager = new StateRecoveryManager();
+    this.healthMonitor = new ConnectionHealthMonitor();
+
     // Event callbacks
     this.callbacks = {
       onConnect: null,
@@ -38,6 +55,8 @@ class SocketService {
       onUserLeft: null,
       onReconnecting: null,
       onReconnectFailed: null,
+      onErrorNotification: null,
+      onConnectionHealthChanged: null,
     };
   }
 
@@ -61,20 +80,40 @@ class SocketService {
           this.userId = this.socket.id;
           this.reconnectAttempts = 0;
           this.isReconnecting = false;
+          this.healthMonitor.recordMessage();
 
           console.log(`[Socket] Connected: ${this.userId}`);
+
+          // Success notification
+          this.errorManager.notify('Connected to server', 'success', 3000);
 
           if (this.callbacks.onConnect) {
             this.callbacks.onConnect(this.userId);
           }
 
+          // Trigger state recovery if needed
+          if (this.reconnectAttempts > 0) {
+            this._triggerStateRecovery();
+          }
+
           resolve(this.userId);
         });
 
-        // Disconnection handler
+        // Disconnection handler with graceful degradation
         this.socket.on('disconnect', (reason) => {
           this.isConnected = false;
           console.log(`[Socket] Disconnected: ${reason}`);
+
+          if (reason === 'io server disconnect') {
+            // Server disconnected - not expected to reconnect
+            this.errorManager.notifyError('Server disconnected', 'Please refresh the page');
+          } else if (reason === 'io client disconnect') {
+            // Client disconnected on purpose
+            console.log('[Socket] Client initiated disconnect');
+          } else {
+            // Network error - will attempt reconnection
+            this.errorManager.notify('Lost connection to server', 'warning');
+          }
 
           if (this.callbacks.onDisconnect) {
             this.callbacks.onDisconnect(reason);
@@ -92,9 +131,26 @@ class SocketService {
             `[Socket] Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`
           );
 
+          this.errorManager.notify(
+            `Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`,
+            'warning'
+          );
+
           if (this.callbacks.onReconnecting) {
             this.callbacks.onReconnecting(this.reconnectAttempts);
           }
+        });
+
+        // Reconnection success handler
+        this.socket.on('reconnect', () => {
+          this.isReconnecting = false;
+          this.reconnectAttempts = 0;
+
+          console.log('[Socket] Reconnected successfully');
+          this.errorManager.notify('Reconnected to server', 'success', 3000);
+
+          // Trigger state recovery
+          this._triggerStateRecovery();
         });
 
         // Final reconnection failure handler
@@ -102,21 +158,30 @@ class SocketService {
           this.isReconnecting = false;
           console.error('[Socket] Failed to reconnect after max attempts');
 
+          this.errorManager.notifyError(
+            'Failed to reconnect',
+            'Maximum reconnection attempts reached. Please refresh the page.'
+          );
+
           if (this.callbacks.onReconnectFailed) {
             this.callbacks.onReconnectFailed();
           }
         });
 
-        // Error handler
+        // Error handler with detailed error reporting
         this.socket.on('error', (error) => {
           console.error('[Socket] Error:', error);
+          this.healthMonitor.recordError();
+
+          const errorMessage = typeof error === 'string' ? error : error?.message || 'Unknown error';
+          this.errorManager.notifyError('Connection error', errorMessage);
 
           if (this.callbacks.onError) {
             this.callbacks.onError(error);
           }
 
           // Only reject on initial connection error
-          if (!this.isConnected) {
+          if (!this.isConnected && !this.isReconnecting) {
             reject(error);
           }
         });
@@ -125,9 +190,54 @@ class SocketService {
         this.setupEventListeners();
       } catch (error) {
         console.error('[Socket] Connection initialization failed:', error);
+        this.errorManager.notifyError(
+          'Connection failed',
+          'Unable to initialize WebSocket connection'
+        );
         reject(error);
       }
     });
+  }
+
+  /**
+   * Trigger state recovery after reconnection
+   */
+  _triggerStateRecovery() {
+    this.stateRecoveryManager.startRecovery(async (manager) => {
+      console.log('[Socket] Starting state recovery...');
+
+      // Request full room state from server
+      return new Promise((resolve) => {
+        this.socket?.emit(
+          'request-room-state',
+          { roomId: this.roomId },
+          (success) => {
+            if (success) {
+              console.log('[Socket] Room state recovered');
+              this.errorManager.notify('State recovered', 'success', 2000);
+            }
+            resolve(success);
+          }
+        );
+      });
+    });
+  }
+
+  /**
+   * Record connection event for health monitoring
+   */
+  _recordConnectionEvent(eventType, duration = 0) {
+    if (eventType === 'message') {
+      this.healthMonitor.recordMessage(duration);
+    } else if (eventType === 'error') {
+      this.healthMonitor.recordError();
+    }
+
+    // Notify health status changes
+    const status = this.healthMonitor.getStatus();
+    if (this.callbacks.onConnectionHealthChanged) {
+      this.callbacks.onConnectionHealthChanged(status);
+    }
   }
 
   /**
@@ -369,6 +479,41 @@ class SocketService {
     const queueSize = this.drawQueue.length;
     this.drawQueue = [];
     console.log(`[Socket] Cleared ${queueSize} queued draw events`);
+  }
+
+  /**
+   * Get error manager for notification control
+   */
+  getErrorManager() {
+    return this.errorManager;
+  }
+
+  /**
+   * Get connection health status
+   */
+  getHealthStatus() {
+    return this.healthMonitor.getStatus();
+  }
+
+  /**
+   * Get reconnection status
+   */
+  getReconnectionStatus() {
+    return this.reconnectionManager.getStatus();
+  }
+
+  /**
+   * Save application state snapshot for recovery
+   */
+  saveStateSnapshot(key, state) {
+    this.stateRecoveryManager.saveSnapshot(key, state);
+  }
+
+  /**
+   * Restore application state snapshot
+   */
+  restoreStateSnapshot(key) {
+    return this.stateRecoveryManager.restoreSnapshot(key);
   }
 }
 
