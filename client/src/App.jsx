@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Toolbar from './Toolbar';
 import ConnectionStatus from './ConnectionStatus';
 import CanvasDrawing from './canvas.jsx';
+import socketService from './socketService.jsx';
 
 function App() {
   const canvasRef = useRef(null);
@@ -34,11 +35,108 @@ function App() {
     drawing.setColor(currentColor);
     drawing.setSize(currentSize);
 
+    // Setup draw callback for sending to server
+    drawing.onDraw = (strokeData) => {
+      socketService.sendDraw(strokeData);
+    };
+
     return () => {
       // Cleanup
       drawing.clearCanvas();
     };
   }, []);
+
+  // Initialize WebSocket connection
+  useEffect(() => {
+    const initializeSocket = async () => {
+      try {
+        // Connect to server
+        const newUserId = await socketService.connect();
+        setUserId(newUserId);
+
+        // Setup socket callbacks
+        socketService.on('Connect', () => {
+          setIsConnected(true);
+          console.log('Connected to server');
+        });
+
+        socketService.on('Disconnect', () => {
+          setIsConnected(false);
+          setUsers([]);
+          console.log('Disconnected from server');
+        });
+
+        socketService.on('RoomJoined', (data) => {
+          setUsers(data.users || []);
+          setCanUndo(false);
+          setCanRedo(false);
+
+          // Render initial history on canvas
+          if (data.history && drawingRef.current) {
+            drawingRef.current.renderFromHistory(data.history);
+          }
+
+          console.log('Joined room:', data.roomId);
+        });
+
+        socketService.on('Draw', (data) => {
+          if (drawingRef.current && data.userId !== newUserId) {
+            drawingRef.current.applyRemoteStroke(data.action.data);
+          }
+        });
+
+        socketService.on('Undo', (data) => {
+          if (drawingRef.current) {
+            // Rebuild canvas from current history
+            // (will be implemented when we receive updated history)
+            console.log('Undo received');
+          }
+        });
+
+        socketService.on('Redo', (data) => {
+          if (drawingRef.current) {
+            console.log('Redo received');
+          }
+        });
+
+        socketService.on('Clear', (data) => {
+          if (drawingRef.current && data.userId !== newUserId) {
+            drawingRef.current.clearCanvas();
+          }
+        });
+
+        socketService.on('UserJoined', (data) => {
+          setUsers((prevUsers) => [...prevUsers, data.user]);
+          console.log('User joined:', data.user.name);
+        });
+
+        socketService.on('UserLeft', (data) => {
+          setUsers((prevUsers) =>
+            prevUsers.filter((u) => u.id !== data.userId)
+          );
+          console.log('User left');
+        });
+
+        socketService.on('Error', (error) => {
+          console.error('Socket error:', error);
+        });
+
+        // Join room after connection
+        socketService.joinRoom(roomId, {
+          name: `User-${newUserId.slice(0, 5)}`,
+        });
+      } catch (error) {
+        console.error('Failed to connect:', error);
+      }
+    };
+
+    initializeSocket();
+
+    // Cleanup on unmount
+    return () => {
+      socketService.disconnect();
+    };
+  }, [roomId]);
 
   // Handle tool change
   useEffect(() => {
@@ -76,16 +174,16 @@ function App() {
   const handleClear = () => {
     if (drawingRef.current) {
       drawingRef.current.clearCanvas();
-      // TODO: Emit clear event to socket
+      socketService.requestClear();
     }
   };
 
   const handleUndo = () => {
-    // TODO: Emit undo event to socket
+    socketService.requestUndo();
   };
 
   const handleRedo = () => {
-    // TODO: Emit redo event to socket
+    socketService.requestRedo();
   };
 
   return (
