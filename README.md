@@ -33,7 +33,6 @@ LetsDraw/
 │   ├── package.json
 │   └── README.md
 │
-├── instructions.md
 ├── ARCHITECTURE.md
 └── README.md
 ```
