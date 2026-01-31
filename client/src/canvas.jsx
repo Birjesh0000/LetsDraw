@@ -28,11 +28,67 @@ class CanvasDrawing {
     this.strokeBuffer = [];
     this.isStrokeInProgress = false;
 
-    // Initialize canvas
+    // Canvas layers for cursor rendering
+    this.cursorOverlayCanvas = null;
+    this.cursorOverlayCtx = null;
+    this.cursorManager = null;    // Initialize canvas
     this.setupCanvas();
     this.setupEventListeners();
+    this.setupCursorOverlay();
 
     console.log('[Canvas] Initialized');
+  }
+
+  /**
+   * Setup cursor overlay canvas for rendering remote cursors
+   */
+  setupCursorOverlay() {
+    // Create overlay canvas for remote cursors
+    const container = this.canvas.parentElement;
+    if (!container) return;
+
+    this.cursorOverlayCanvas = document.createElement('canvas');
+    this.cursorOverlayCanvas.width = this.canvas.width;
+    this.cursorOverlayCanvas.height = this.canvas.height;
+
+    // Style as overlay
+    this.cursorOverlayCanvas.style.position = 'absolute';
+    this.cursorOverlayCanvas.style.top = this.canvas.offsetTop + 'px';
+    this.cursorOverlayCanvas.style.left = this.canvas.offsetLeft + 'px';
+    this.cursorOverlayCanvas.style.pointerEvents = 'none';
+    this.cursorOverlayCanvas.style.zIndex = '10';
+    this.cursorOverlayCanvas.className = 'cursor-overlay-canvas';
+
+    // Get context
+    this.cursorOverlayCtx = this.cursorOverlayCanvas.getContext('2d');
+
+    // Insert before main canvas or after
+    container.style.position = 'relative';
+    container.appendChild(this.cursorOverlayCanvas);
+
+    console.log('[Canvas] Cursor overlay created');
+  }
+
+  /**
+   * Setup canvas properties and styling
+   */
+  setupCanvas() {
+    // Set canvas resolution
+    this.canvas.width = this.canvas.offsetWidth;
+    this.canvas.height = this.canvas.offsetHeight;
+
+    // Set default canvas styling
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    this.ctx.imageSmoothingEnabled = true;
+
+    // Fill with white background
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    console.log(
+      `[Canvas] Initialized: ${this.canvas.width}x${this.canvas.height}`
+    );
   }
 
   /**
@@ -386,6 +442,17 @@ class CanvasDrawing {
       this.canvas.style.cursor = 'crosshair';
     } else {
       this.canvas.style.cursor = 'crosshair';
+    }
+  }
+
+  /**
+   * Set cursor manager for rendering remote cursors
+   */
+  setCursorManager(cursorManager) {
+    this.cursorManager = cursorManager;
+    if (cursorManager && this.cursorOverlayCanvas) {
+      // Update cursor manager's canvas reference if needed
+      console.log('[Canvas] Cursor manager set');
     }
   }
 

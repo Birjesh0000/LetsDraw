@@ -6,6 +6,7 @@ import socketService from './socketService.jsx';
 import { createDrawingDebouncer } from './utils/drawingSync.jsx';
 import { RoomManager } from './utils/roomManager.jsx';
 import { HistoryManager } from './utils/historyManager.jsx';
+import { UserCursorManager } from './utils/userCursorManager.jsx';
 
 function App() {
   const canvasRef = useRef(null);
@@ -13,6 +14,8 @@ function App() {
   const drawDebouncer = useRef(null);
   const roomManager = useRef(null);
   const historyManager = useRef(null);
+  const userCursorManager = useRef(null);
+  const cursorPositionDebouncer = useRef(null);
 
   // Drawing state
   const [currentTool, setCurrentTool] = useState('brush');
@@ -48,6 +51,11 @@ function App() {
       socketService.sendDraw(strokeData);
     }, 16); // ~60fps batching
 
+    // Create debouncer for cursor position events
+    cursorPositionDebouncer.current = createDrawingDebouncer((position) => {
+      socketService.socket?.emit('cursor-move', position);
+    }, 100); // Send cursor updates at ~10Hz
+
     // Setup draw callback - use debouncer
     drawing.onDraw = (strokeData) => {
       if (drawDebouncer.current) {
@@ -55,11 +63,35 @@ function App() {
       }
     };
 
+    // Track mouse position for cursor indicator
+    const handleCanvasMouseMove = (e) => {
+      const rect = drawing.canvas.getBoundingClientRect();
+      const scaleX = drawing.canvas.width / rect.width;
+      const scaleY = drawing.canvas.height / rect.height;
+
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+
+      if (cursorPositionDebouncer.current) {
+        cursorPositionDebouncer.current.send({
+          x,
+          y,
+          isDrawing: drawing.isDrawing,
+        });
+      }
+    };
+
+    drawing.canvas.addEventListener('mousemove', handleCanvasMouseMove);
+
     return () => {
       // Flush pending draws on cleanup
       if (drawDebouncer.current) {
         drawDebouncer.current.flush();
       }
+      if (cursorPositionDebouncer.current) {
+        cursorPositionDebouncer.current.flush();
+      }
+      drawing.canvas.removeEventListener('mousemove', handleCanvasMouseMove);
       drawing.clearCanvas();
     };
   }, []);
@@ -75,10 +107,19 @@ function App() {
         const newUserId = await socketService.connect();
         setUserId(newUserId);
 
-        // Step 2: Initialize room manager and history manager
+        // Step 2: Initialize room manager, history manager, and cursor manager
         console.log('[App] Step 2: Initializing managers...');
         roomManager.current = new RoomManager(socketService);
         historyManager.current = new HistoryManager(socketService);
+        userCursorManager.current = new UserCursorManager(
+          socketService,
+          drawingRef.current.cursorOverlayCanvas
+        );
+
+        // Set cursor manager in canvas
+        if (drawingRef.current) {
+          drawingRef.current.setCursorManager(userCursorManager.current);
+        }
 
         // Setup history manager callbacks
         historyManager.current.on('can-undo-changed', (canUndo) => {
@@ -210,7 +251,46 @@ function App() {
           if (roomManager.current) {
             roomManager.current.handleUserLeft(data.userId);
           }
+          // Remove their cursor indicator
+          if (userCursorManager.current) {
+            userCursorManager.current.removeRemoteCursor(data.userId);
+          }
         });
+
+        // Handle remote cursor movement
+        socketService.on('CursorMove', (data) => {
+          if (userCursorManager.current && data.userId !== newUserId) {
+            const cursor = userCursorManager.current.addRemoteCursor(
+              data.userId,
+              data.userName || 'User',
+              data.color || '#0000FF'
+            );
+
+            if (cursor) {
+              userCursorManager.current.updateCursorPosition(
+                data.userId,
+                data.x,
+                data.y,
+                data.isDrawing || false
+              );
+            }
+          }
+        });
+
+        // Start rendering user cursors after joining room
+        const originalRoomCallback = roomManager.current.callbacks.onRoomJoined;
+        roomManager.current.callbacks.onRoomJoined = (data) => {
+          // Start cursor rendering
+          if (userCursorManager.current) {
+            userCursorManager.current.startRendering();
+            console.log('[App] Started cursor rendering');
+          }
+
+          // Call original callback
+          if (originalRoomCallback) {
+            originalRoomCallback(data);
+          }
+        };
 
         // Step 3: Join the room
         console.log(`[App] Step 3: Joining room "${roomId}"...`);
@@ -236,6 +316,10 @@ function App() {
 
     // Cleanup on unmount
     return () => {
+      if (userCursorManager.current) {
+        userCursorManager.current.stopRendering();
+        userCursorManager.current.clearAllCursors();
+      }
       if (roomManager.current) {
         roomManager.current.leaveRoom();
       }
