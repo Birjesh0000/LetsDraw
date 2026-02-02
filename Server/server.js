@@ -266,10 +266,16 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Broadcast clear to all users
+      // Get updated history state after clear
+      const roomState = stateManager.getRoomState(roomId);
+      const historyMetadata = roomState ? roomState.getMetadata() : {};
+
+      // Broadcast clear to all users with updated state
       io.to(roomId).emit('clear', {
         userId: socket.id,
         action,
+        canUndo: historyMetadata.canUndo,
+        canRedo: historyMetadata.canRedo,
       });
 
       console.log(`[Action] Clear in room ${roomId} by ${socket.id}`);

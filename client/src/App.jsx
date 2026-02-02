@@ -345,24 +345,64 @@ function App() {
         });
 
         socketService.on('Undo', (data) => {
-          console.log('[App] Undo event received');
+          console.log('[App] Undo event received', data);
+          
+          // Update undo/redo button states immediately
+          if (data.canUndo !== undefined) {
+            setCanUndo(data.canUndo);
+          }
+          if (data.canRedo !== undefined) {
+            setCanRedo(data.canRedo);
+          }
+          
+          // Re-render canvas from history
+          if (data.history && drawingRef.current) {
+            console.log('[App] Re-rendering canvas after undo with', data.history.length, 'actions');
+            drawingRef.current.clearCanvas();
+            drawingRef.current.renderFromHistory(data.history);
+          }
+          
+          // Also handle via history manager for consistency
           if (historyManager.current) {
             historyManager.current.handleUndoResponse(data);
           }
-          // Update undo/redo button states
-          if (data.canUndo !== undefined) {
-            setCanUndo(data.canUndo);
-          }
-          if (data.canRedo !== undefined) {
-            setCanRedo(data.canRedo);
-          }
+          
+          setIsUndoRedoPending(false);
         });
 
         socketService.on('Redo', (data) => {
-          console.log('[App] Redo event received');
+          console.log('[App] Redo event received', data);
+          
+          // Update undo/redo button states immediately
+          if (data.canUndo !== undefined) {
+            setCanUndo(data.canUndo);
+          }
+          if (data.canRedo !== undefined) {
+            setCanRedo(data.canRedo);
+          }
+          
+          // Re-render canvas from history
+          if (data.history && drawingRef.current) {
+            console.log('[App] Re-rendering canvas after redo with', data.history.length, 'actions');
+            drawingRef.current.clearCanvas();
+            drawingRef.current.renderFromHistory(data.history);
+          }
+          
+          // Also handle via history manager for consistency
           if (historyManager.current) {
             historyManager.current.handleRedoResponse(data);
           }
+          
+          setIsUndoRedoPending(false);
+        });
+
+        socketService.on('Clear', (data) => {
+          // Clear canvas for all users
+          if (drawingRef.current) {
+            drawingRef.current.clearCanvas();
+            console.log('[App] Canvas cleared');
+          }
+          
           // Update undo/redo button states
           if (data.canUndo !== undefined) {
             setCanUndo(data.canUndo);
@@ -370,53 +410,8 @@ function App() {
           if (data.canRedo !== undefined) {
             setCanRedo(data.canRedo);
           }
-        });
-
-        socketService.on('Clear', (data) => {
-          if (drawingRef.current && data.userId !== newUserId) {
-            // Create clear action for conflict detection
-            const clearAction = {
-              type: 'clear',
-              userId: data.userId,
-              timestamp: data.timestamp || Date.now(),
-              id: data.id,
-            };
-
-            // Enqueue and process clear action
-            if (actionSequencer.current) {
-              actionSequencer.current.enqueueAction(clearAction);
-              const processed = actionSequencer.current.processQueue();
-
-              // Apply clear if not rejected
-              if (processed.actions.length > 0 && processed.actions[0].resolution !== 'REJECTED') {
-                drawingRef.current.clearCanvas();
-
-                // Record state checkpoint
-                if (stateValidator.current) {
-                  stateValidator.current.recordCheckpoint({
-                    timestamp: Date.now(),
-                    actions: processed.actions,
-                    hasConflicts: processed.conflicts.length > 0,
-                  });
-                }
-
-                // Rebuild canvas if needed
-                if (actionSequencer.current.needsRebuild()) {
-                  console.log('[App] Rebuilding canvas after clear due to conflicts');
-                  const actionsToReplay = actionSequencer.current.getActionsToReplay();
-                  actionsToReplay.forEach((replayAction) => {
-                    if (replayAction.type === 'stroke') {
-                      drawingRef.current.applyRemoteStroke(replayAction.data);
-                    }
-                  });
-                }
-              }
-            } else {
-              // Fallback: clear directly if sequencer not initialized
-              drawingRef.current.clearCanvas();
-            }
-            console.log('[App] Canvas cleared by remote user');
-          }
+          
+          setIsUndoRedoPending(false);
         });
 
         socketService.on('UserJoined', (data) => {
