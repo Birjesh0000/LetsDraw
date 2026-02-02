@@ -223,11 +223,6 @@ class CanvasDrawing {
     this.isStrokeInProgress = false;
     this.currentStroke = null;
   }
-    }
-
-    this.isStrokeInProgress = false;
-    this.currentStroke = null;
-  }
 
   /**
    * Handle mouse leave event - end stroke
