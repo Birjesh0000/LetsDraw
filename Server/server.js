@@ -6,9 +6,13 @@ import { StateManager } from './drawing-state.js';
 
 const app = express();
 const server = createServer(app);
+
+// Get CORS origin from environment or use localhost for development
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+
 const io = new SocketIOServer(server, {
   cors: {
-    origin: 'http://localhost:5173',
+    origin: corsOrigin,
     methods: ['GET', 'POST'],
   },
 });
