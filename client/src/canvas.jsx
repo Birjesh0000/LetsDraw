@@ -187,6 +187,8 @@ class CanvasDrawing {
     }
 
     // Update last position
+    const prevX = this.lastX;
+    const prevY = this.lastY;
     this.lastX = x;
     this.lastY = y;
 
@@ -195,6 +197,8 @@ class CanvasDrawing {
       tool: this.currentTool,
       x,
       y,
+      lastX: prevX,
+      lastY: prevY,
       color: this.currentColor,
       size: this.currentSize,
     });
@@ -386,48 +390,67 @@ class CanvasDrawing {
     if (!strokeData) return;
 
     // Set up context for remote stroke
-    this.ctx.globalCompositeOperation = 'source-over';
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
     this.ctx.imageSmoothingEnabled = true;
 
     if (strokeData.tool === 'brush') {
+      this.ctx.globalCompositeOperation = 'source-over';
       this.ctx.strokeStyle = strokeData.color;
       this.ctx.lineWidth = strokeData.size;
 
-      // Draw a small circle at the point (since we receive individual points)
+      // Draw from last position to current position
+      // Use stored lastX/Y to create connected lines
+      const fromX = strokeData.lastX !== undefined ? strokeData.lastX : strokeData.x;
+      const fromY = strokeData.lastY !== undefined ? strokeData.lastY : strokeData.y;
+
       this.ctx.beginPath();
-      this.ctx.arc(strokeData.x, strokeData.y, strokeData.size / 2, 0, Math.PI * 2);
-      this.ctx.fill();
+      this.ctx.moveTo(fromX, fromY);
+      this.ctx.lineTo(strokeData.x, strokeData.y);
+      this.ctx.stroke();
+      this.ctx.closePath();
 
       // Mark region as dirty
+      const minX = Math.min(fromX, strokeData.x);
+      const minY = Math.min(fromY, strokeData.y);
+      const maxX = Math.max(fromX, strokeData.x);
+      const maxY = Math.max(fromY, strokeData.y);
+
       this.dirtyRectRenderer.markDirty(
-        strokeData.x - strokeData.size / 2,
-        strokeData.y - strokeData.size / 2,
-        strokeData.size,
-        strokeData.size,
+        minX,
+        minY,
+        maxX - minX + strokeData.size,
+        maxY - minY + strokeData.size,
         2
       );
     } else if (strokeData.tool === 'eraser') {
       this.ctx.globalCompositeOperation = 'destination-out';
 
-      // Erase a small area
-      this.ctx.clearRect(
-        strokeData.x - strokeData.size / 2,
-        strokeData.y - strokeData.size / 2,
-        strokeData.size,
-        strokeData.size
-      );
+      // Erase line from last position to current position
+      const fromX = strokeData.lastX !== undefined ? strokeData.lastX : strokeData.x;
+      const fromY = strokeData.lastY !== undefined ? strokeData.lastY : strokeData.y;
+
+      this.ctx.lineWidth = strokeData.size;
+      this.ctx.beginPath();
+      this.ctx.moveTo(fromX, fromY);
+      this.ctx.lineTo(strokeData.x, strokeData.y);
+      this.ctx.stroke();
+      this.ctx.closePath();
 
       // Reset composite operation
       this.ctx.globalCompositeOperation = 'source-over';
 
       // Mark region as dirty
+      const minX = Math.min(fromX, strokeData.x);
+      const minY = Math.min(fromY, strokeData.y);
+      const maxX = Math.max(fromX, strokeData.x);
+      const maxY = Math.max(fromY, strokeData.y);
+
       this.dirtyRectRenderer.markDirty(
-        strokeData.x - strokeData.size / 2,
-        strokeData.y - strokeData.size / 2,
-        strokeData.size,
-        strokeData.size,
+        minX,
+        minY,
+        maxX - minX + strokeData.size,
+        maxY - minY + strokeData.size,
         2
       );
     }
