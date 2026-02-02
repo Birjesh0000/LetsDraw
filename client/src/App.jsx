@@ -230,14 +230,24 @@ function App() {
 
         // Setup room manager callbacks
         roomManager.current.on('RoomJoined', (data) => {
-          console.log('[App] Room joined event received');
+          console.log('[App] Room joined event received', data);
           setUsers(data.users || []);
           setRoomId(data.roomId);
           
           // Set room ID in socket service for undo/redo/clear operations
           socketService.setRoomId(data.roomId);
 
-          // Update history state from initial room data
+          // Directly set undo/redo button states from initial room data
+          if (data.canUndo !== undefined) {
+            setCanUndo(data.canUndo);
+            console.log('[App] Initial canUndo set to:', data.canUndo);
+          }
+          if (data.canRedo !== undefined) {
+            setCanRedo(data.canRedo);
+            console.log('[App] Initial canRedo set to:', data.canRedo);
+          }
+
+          // Also update history manager state for consistency
           if (data.canUndo !== undefined || data.canRedo !== undefined) {
             historyManager.current.updateHistoryState(data);
           }

@@ -59,9 +59,10 @@ class DrawingState {
    * @returns {object|null} The action that was undone, or null if at start
    */
   undo() {
-    if (this.currentIndex > 0) {
+    if (this.currentIndex >= 0) {
+      const undoneAction = this.history[this.currentIndex];
       this.currentIndex--;
-      return this.history[this.currentIndex];
+      return undoneAction;
     }
     return null;
   }
@@ -103,7 +104,7 @@ class DrawingState {
    * @returns {boolean} True if undo available
    */
   canUndo() {
-    return this.currentIndex > 0;
+    return this.currentIndex >= 0;
   }
 
   /**
