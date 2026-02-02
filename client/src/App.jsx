@@ -233,6 +233,9 @@ function App() {
           console.log('[App] Room joined event received');
           setUsers(data.users || []);
           setRoomId(data.roomId);
+          
+          // Set room ID in socket service for undo/redo/clear operations
+          socketService.setRoomId(data.roomId);
 
           // Update history state from initial room data
           if (data.canUndo !== undefined || data.canRedo !== undefined) {

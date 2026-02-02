@@ -61,6 +61,15 @@ class SocketService {
   }
 
   /**
+   * Set the current room ID
+   * @param {string} roomId - Room ID to join
+   */
+  setRoomId(roomId) {
+    this.roomId = roomId;
+    console.log(`[Socket] Room ID set to: ${roomId}`);
+  }
+
+  /**
    * Connect to WebSocket server with error handling and reconnection
    */
   connect() {
