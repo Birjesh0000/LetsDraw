@@ -334,6 +334,14 @@ function App() {
               drawingRef.current.applyRemoteStroke(data.action.data);
             }
           }
+          
+          // Update undo/redo states from draw event
+          if (data.canUndo !== undefined) {
+            setCanUndo(data.canUndo);
+          }
+          if (data.canRedo !== undefined) {
+            setCanRedo(data.canRedo);
+          }
         });
 
         socketService.on('Undo', (data) => {
@@ -341,12 +349,26 @@ function App() {
           if (historyManager.current) {
             historyManager.current.handleUndoResponse(data);
           }
+          // Update undo/redo button states
+          if (data.canUndo !== undefined) {
+            setCanUndo(data.canUndo);
+          }
+          if (data.canRedo !== undefined) {
+            setCanRedo(data.canRedo);
+          }
         });
 
         socketService.on('Redo', (data) => {
           console.log('[App] Redo event received');
           if (historyManager.current) {
             historyManager.current.handleRedoResponse(data);
+          }
+          // Update undo/redo button states
+          if (data.canUndo !== undefined) {
+            setCanUndo(data.canUndo);
+          }
+          if (data.canRedo !== undefined) {
+            setCanRedo(data.canRedo);
           }
         });
 

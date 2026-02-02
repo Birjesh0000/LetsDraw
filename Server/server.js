@@ -78,6 +78,8 @@ io.on('connection', (socket) => {
       // Send initial state to the user
       const history = stateManager.getHistory(roomId);
       const users = roomManager.getUsersInRoom(roomId);
+      const roomState = stateManager.getRoomState(roomId);
+      const historyMetadata = roomState ? roomState.getMetadata() : {};
 
       socket.emit('room-joined', {
         roomId,
@@ -85,6 +87,8 @@ io.on('connection', (socket) => {
         user,
         users,
         history,
+        canUndo: historyMetadata.canUndo || false,
+        canRedo: historyMetadata.canRedo || false,
       });
 
       // Broadcast to others in room that new user joined
@@ -128,10 +132,16 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Broadcast to all users in the room
+      // Get updated history state after draw
+      const roomState = stateManager.getRoomState(roomId);
+      const historyMetadata = roomState ? roomState.getMetadata() : {};
+
+      // Broadcast to all users in the room with updated history state
       io.to(roomId).emit('draw', {
         userId: socket.id,
         action,
+        canUndo: historyMetadata.canUndo,
+        canRedo: historyMetadata.canRedo,
       });
     } catch (error) {
       console.error(`[Error] draw: ${error.message}`);
@@ -167,10 +177,16 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Broadcast undo to all users
+      // Get updated history state
+      const updatedState = roomState.getMetadata();
+
+      // Broadcast undo to all users with updated state
       io.to(roomId).emit('undo', {
         userId: socket.id,
         action: undoneAction,
+        history: stateManager.getHistory(roomId),
+        canUndo: updatedState.canUndo,
+        canRedo: updatedState.canRedo,
       });
 
       console.log(`[Action] Undo in room ${roomId} by ${socket.id}`);
@@ -208,10 +224,16 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Broadcast redo to all users
+      // Get updated history state
+      const updatedState = roomState.getMetadata();
+
+      // Broadcast redo to all users with updated state
       io.to(roomId).emit('redo', {
         userId: socket.id,
         action: redoneAction,
+        history: stateManager.getHistory(roomId),
+        canUndo: updatedState.canUndo,
+        canRedo: updatedState.canRedo,
       });
 
       console.log(`[Action] Redo in room ${roomId} by ${socket.id}`);
