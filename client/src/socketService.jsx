@@ -13,7 +13,7 @@ import {
 } from './utils/errorHandler.jsx';
 
 class SocketService {
-  constructor(serverUrl = 'http://localhost:3001') {
+  constructor(serverUrl = 'https://letsdraw.onrender.com') {
     this.serverUrl = serverUrl;
     this.socket = null;
     this.isConnected = false;

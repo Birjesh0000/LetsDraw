@@ -12,9 +12,11 @@ const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
 const io = new SocketIOServer(server, {
   cors: {
-    origin: corsOrigin,
+    origin: [corsOrigin, 'https://letsdraw-ebon.vercel.app'],
     methods: ['GET', 'POST'],
+    credentials: true,
   },
+  transports: ['websocket', 'polling'],
 });
 
 const PORT = process.env.PORT || 3001;
