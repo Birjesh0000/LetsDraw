@@ -1,52 +1,89 @@
-# LetsDraw
+# LetsDraw - Real-Time Collaborative Drawing Canvas
 
-A real-time drawing app where multiple people draw on the same canvas together. Built with React, Node.js, and Socket.io.
+https://letsdraw-ebon.vercel.app
 
-Live: https://letsdraw-ebon.vercel.app
+A multi-user drawing application where multiple users can draw simultaneously on a shared canvas. Built with React, Node.js, and Socket.io.
 
-## Getting Started
+## Quick Start
 
-You need Node.js v18+. 
+Requirements: Node.js v18+
 
-Terminal 1 - run the backend:
-```
+**Backend:**
+```bash
 cd Server
 npm install
 npm start
 ```
-It runs on http://localhost:3001
+Runs on http://localhost:3001
 
-Terminal 2 - run the frontend:
-```
+**Frontend:**
+```bash
 cd client
 npm install
 npm run dev
 ```
-Open http://localhost:5173
+Runs on http://localhost:5173
 
-## How to Test with Multiple Users
+## Testing with Multiple Users
 
-Open http://localhost:5173 in two browser windows. Both join the same room automatically. Draw in one window and you'll see it appear in the other instantly. The undo/redo/clear buttons work across both windows.
+1. Open http://localhost:5173 in two browser windows
+2. Both will auto-join the same room
+3. Draw in one window - it appears in the other in real-time
+4. Test undo/redo/clear buttons - they work across both users
 
-## What It Does
+## Features Implemented
 
-Real-time drawing sync across multiple users. Brush and eraser with color picker. You can undo/redo even what other people drew. Clear the whole canvas. Shows where other users are with cursors. Handles reconnection if the connection drops.
+- Real-time drawing synchronization via Socket.io
+- Brush and eraser tools with adjustable size
+- Color picker
+- Global undo/redo (one user can undo another's drawing)
+- Clear canvas
+- Remote user cursor indicators with drawing state
+- Automatic reconnection with exponential backoff
+- Connection status monitoring
+- Error notifications
 
-## Folder Structure
+## Project Structure
 
-client - React frontend, Socket.io connection, canvas drawing
-Server - Node + Express backend, room management, history/undo tracking
+```
+LetsDraw/
+├── client/              # React + Vite frontend
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── canvas.jsx
+│   │   ├── socketService.jsx
+│   │   ├── Toolbar.jsx
+│   │   └── utils/
+│   └── vite.config.js
+│
+└── Server/              # Node.js backend
+    ├── server.js
+    ├── rooms.js
+    └── drawing-state.js
+```
 
-## What Won't Work
+## Known Limitations
 
-Drawings disappear if the server restarts (no database). Can't export or download. No zoom/pan. Touch pressure doesn't affect brush size. Gets slow with 10+ people drawing at once.
+- No persistence - drawing lost if server restarts
+- No export/download functionality
+- Zoom and pan not implemented
+- No touch pressure sensitivity
+- Performance degrades with 10+ concurrent users
 
-## Why This Approach
+## Technical Approach
 
-Used native Canvas API, no drawing libraries. Server keeps the source of truth for all drawing. Events get batched to reduce network traffic. Only redraw the parts of the canvas that changed. This keeps it fast even with multiple users.
+- Native Canvas API (no external drawing libraries)
+- Server as source of truth for all drawing state
+- Event batching every 16ms to reduce network traffic
+- Dirty rectangle rendering optimization for performance
 
 ## Time Spent
 
-Initial setup - 1.5 hours. Core drawing and sync - 2.5 hours. Undo/redo - 1.5 hours. User cursors - 1 hour. Debugging and deployment - 1 hour. Total around 7.5 hours.
+- Setup and architecture: 1.5 hours
+- Core drawing and sync: 2.5 hours
+- Undo/redo and conflict handling: 1.5 hours
+- User presence indicators: 1 hour
+- Bug fixes and deployment: 1 hour
+- Total: 7.5 hours
 
-Architecture details are in ARCHITECTURE.md.
+See ARCHITECTURE.md for technical details.
