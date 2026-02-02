@@ -304,7 +304,8 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`[Server] Running on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`[Server] Running on http://0.0.0.0:${PORT}`);
   console.log(`[WebSocket] Socket.io ready for connections`);
+  console.log(`[Production] CORS Origin: ${corsOrigin}`);
 });
