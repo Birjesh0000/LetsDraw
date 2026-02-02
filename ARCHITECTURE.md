@@ -1,173 +1,41 @@
-# Architecture & Technical Design
+# Architecture
 
-## Data Flow
+## How Data Flows
 
-```
-User Input (Client)
-        ↓
-Canvas.jsx (local rendering)
-        ↓
-socketService.emit("draw")
-        ↓
-Server receives & validates
-        ↓
-drawing-state.js processes action
-        ↓
-Server broadcasts to all clients in room
-        ↓
-App.jsx receives & re-renders canvas
-        ↓
-Canvas.jsx applies remote stroke
-```
+User draws on canvas -> Canvas renders locally -> Draw event sent to server -> Server saves it and validates -> Server sends to everyone in the room -> Other clients apply the stroke to their canvas
 
-## WebSocket Events
+## WebSocket Communication
 
-### Client → Server
+When someone draws, we send x, y, color, brush size, and the previous position (lastX, lastY). The server gets these events and broadcasts them. For undo/redo/clear, the server processes them and tells everyone what the updated history is. We also send when someone starts/stops drawing so cursors can show a "drawing" indicator.
 
-**draw**
-```javascript
-{
-  tool: "brush" | "eraser",
-  x: number,
-  y: number,
-  lastX: number,     // Previous position for smooth lines
-  lastY: number,
-  color: string,
-  size: number
-}
-```
+## State on Client and Server
 
-**undo, redo, clear**
-- Payload: `{ roomId: string }`
-- Server processes and returns updated history state
+On the client side, App.jsx owns the canvas element and button states (can undo/redo?). Canvas.jsx handles local drawing state and brush settings. SocketService manages the connection. HistoryManager keeps the last 20 drawing actions.
 
-**drawing-state**
-```javascript
-{
-  isDrawing: boolean,
-  userId: string
-}
-```
-Used for remote cursor "drawing" indicator animation.
+On the server, rooms.js tracks who's connected in each room. drawing-state.js keeps the full history of strokes and manages undo/redo. Everything is in memory, so if the server restarts you lose the drawing.
 
-### Server → Client
+## Undo and Redo
 
-**draw** (broadcast to room)
-- Same stroke data + userId, processed and applied to canvas
+Each room has a history of strokes. When someone hits undo, the server removes the most recent stroke from the history (doesn't matter who drew it). Then it sends the updated history to everyone. Same with redo - restores the last removed stroke. This way if user A and user B are both drawing, user B can undo A's stroke.
 
-**action-response** (draw/undo/redo/clear)
-```javascript
-{
-  type: "draw" | "undo" | "redo" | "clear",
-  canUndo: boolean,
-  canRedo: boolean,
-  history: [...strokes]
-}
-```
+## Performance
 
-**remote-cursor-move**
-```javascript
-{
-  userId: string,
-  x: number,
-  y: number,
-  color: string,
-  label: string
-}
-```
+Drawing events happen constantly (100+ per second). Instead of sending each one, we batch them every 16ms so we're only sending about 60 per second. Huge bandwidth savings.
 
-## State Management
+For canvas rendering, we don't redraw the whole thing each frame. We only redraw the rectangle where strokes happened. This is way faster than clearing and redrawing everything.
 
-### Client
-- **App.jsx**: Owns canvas ref, undo/redo button states, user list
-- **canvas.jsx**: Local drawing state, brush settings, history tracking
-- **socketService.jsx**: Connection state, event handlers
-- **HistoryManager**: Local undo/redo stack (20 action limit)
-- **UserCursorManager**: Remote cursor positions and animation
+Rooms are independent so if many people use it, just split them into different rooms and the load is distributed.
 
-### Server
-- **rooms.js**: Active rooms and user tracking
-- **drawing-state.js**: Per-room drawing history and undo/redo state
-- **In-memory storage**: No database; state lost on server restart
+The server listens on all interfaces (0.0.0.0) not just localhost, so external services like Vercel and Render can reach it. CORS is set up for the frontend domain.
 
-## Undo/Redo Strategy
+## Handling Problems
 
-1. **Client-side**: HistoryManager keeps local stack (20 item limit)
-2. **Server-side**: drawing-state.js maintains per-room history
-3. **Global undo**: One user's undo removes the most recent stroke (any user's)
-4. **Conflict handling**: ActionSequencer validates action sequence to prevent state divergence
-5. **Optimization**: Only re-render affected canvas regions on undo/redo
+If someone sends actions out of order, the server detects it. If it's a duplicate, ignore it. If prerequisites are missing, queue it and wait. If there's a real conflict, tell the client to resync from the authoritative history on the server. This prevents the client and server from getting out of sync.
 
-Example:
-- User A draws → Server appends to history
-- User B draws → Server appends to history
-- User B presses undo → User A's stroke is removed (most recent)
-- Both users see consistent state
+Socket.io handles reconnection automatically with exponential backoff. If the connection drops, it tries to reconnect, waiting longer between each retry. When it reconnects, the client re-joins the room and gets the full history, so it catches up.
 
-## Performance Decisions
+## Tech Stack
 
-### Event Batching
-Drawing events are batched every 16ms (~60fps) to reduce network traffic:
-- Raw mouse events: ~100-200 per second per user
-- Batched events: ~60 per second per user
-- Saves 60-70% bandwidth while maintaining smooth appearance
+Canvas for drawing (no libraries). Socket.io for real-time sync. React and Vite on the frontend. Node and Express on the backend. Everything stored in memory, no database. Tailwind for styling.
 
-### Dirty Rectangle Rendering
-Only redraw changed canvas regions:
-- Track bounding box of all strokes in frame
-- `ctx.clearRect()` only that region instead of entire canvas
-- Saves CPU on large canvas with sparse drawing
-
-### Room-based Architecture
-- Users only sync with same room
-- Allows horizontal scaling (multiple rooms = multiple independent states)
-- Memory efficient for many concurrent users
-
-### Server Binding
-- Listens on `0.0.0.0` (all interfaces) not `localhost`
-- Allows external services (Vercel, Render) to connect
-- CORS configured for frontend domain
-
-## Conflict Resolution
-
-**ActionSequencer Pattern:**
-1. Each action includes sequence number
-2. Server maintains expected sequence counter per room
-3. Out-of-order actions trigger validation:
-   - If action is duplicate: ignore
-   - If action is missing prerequisites: queue and retry
-   - If conflict detected: resync client history
-
-**Example:**
-```
-Client sequence: 1 → 2 → 3 → 5 (4 missing)
-Server detects gap, sends most recent history
-Client rebuilds from authoritative server state
-```
-
-This prevents split-brain scenarios where client and server drawing states diverge.
-
-## Error Handling & Reconnection
-
-1. **Socket.io automatic reconnection**: Built-in with exponential backoff
-2. **Custom retry logic**: Manual retry with max 10 attempts (30 second total)
-3. **State recovery**: On reconnect, client re-enters room and receives full history
-4. **Notification**: UI shows connection status (connected/connecting/disconnected)
-
-## Technology Choices
-
-| Component | Choice | Why |
-|-----------|--------|-----|
-| Drawing | Canvas API | No external libraries allowed; fast native rendering |
-| Real-time | Socket.io | WebSocket with fallback; excellent developer experience |
-| Frontend | React + Vite | Fast HMR, modern tooling, component reusability |
-| Backend | Express + Node | Fast, async I/O for many concurrent connections |
-| Storage | In-memory | Sufficient for drawing demo; simpler than database |
-| Styling | Tailwind CSS | Rapid UI development; utility-first approach |
-
-## Known Trade-offs
-
-1. **No persistence**: Drawing lost on server restart (acceptable for demo)
-2. **In-memory scaling**: Max ~100 concurrent users before memory issues (could add Redis)
-3. **No authentication**: Any user can join any room (acceptable for demo)
-4. **Full history replay**: New users download entire stroke history (fine for < 5 min sessions)
+Tradeoffs: No persistence if the server restarts. Can handle about 100 concurrent users before memory gets tight. No login system. New users have to download the entire drawing history when they join.

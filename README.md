@@ -1,99 +1,52 @@
-# LetsDraw - Real-Time Collaborative Drawing Canvas
+# LetsDraw
 
-A multi-user drawing application where multiple users draw simultaneously on a shared canvas. Built with React, Vite, Node.js, and Socket.io.
+A real-time drawing app where multiple people draw on the same canvas together. Built with React, Node.js, and Socket.io.
 
-## Quick Start
+Live: https://letsdraw-ebon.vercel.app
 
-### Prerequisites
-- Node.js v18+
-- npm
+## Getting Started
 
-### Setup & Run
+You need Node.js v18+. 
 
-**Terminal 1 - Backend:**
-```bash
+Terminal 1 - run the backend:
+```
 cd Server
 npm install
 npm start
 ```
-Backend runs on `http://localhost:3001`
+It runs on http://localhost:3001
 
-**Terminal 2 - Frontend:**
-```bash
+Terminal 2 - run the frontend:
+```
 cd client
 npm install
 npm run dev
 ```
-Frontend runs on `http://localhost:5173`
+Open http://localhost:5173
 
-## Testing with Multiple Users
+## How to Test with Multiple Users
 
-1. Open `http://localhost:5173` in two browser windows/tabs
-2. Both will auto-join the same room
-3. Draw in one window → see it appear in the other in real-time
-4. Test undo/redo/clear buttons - they work across both users
+Open http://localhost:5173 in two browser windows. Both join the same room automatically. Draw in one window and you'll see it appear in the other instantly. The undo/redo/clear buttons work across both windows.
 
-## Features Implemented
+## What It Does
 
-✅ Real-time drawing synchronization (Socket.io)
-✅ Brush & eraser tools with adjustable size
-✅ Color picker
-✅ Global undo/redo (one user can undo another's drawing)
-✅ Clear canvas
-✅ Remote user cursor indicators with drawing state
-✅ Automatic reconnection with exponential backoff
-✅ Connection health monitoring
-✅ Error notifications
+Real-time drawing sync across multiple users. Brush and eraser with color picker. You can undo/redo even what other people drew. Clear the whole canvas. Shows where other users are with cursors. Handles reconnection if the connection drops.
 
-## Project Structure
+## Folder Structure
 
-```
-LetsDraw/
-├── client/              # React + Vite frontend
-│   ├── src/
-│   │   ├── App.jsx
-│   │   ├── canvas.jsx
-│   │   ├── socketService.jsx
-│   │   ├── Toolbar.jsx
-│   │   └── utils/       # historyManager, userCursorManager, etc.
-│   └── vite.config.js
-│
-└── Server/              # Node.js backend
-    ├── server.js        # Express + Socket.io
-    ├── rooms.js         # Room management
-    └── drawing-state.js # History & undo/redo
-```
+client - React frontend, Socket.io connection, canvas drawing
+Server - Node + Express backend, room management, history/undo tracking
 
-## Known Limitations
+## What Won't Work
 
-- Canvas doesn't persist after page refresh (state is lost)
-- No export/download functionality
-- Zoom/pan not implemented
-- No touch pressure sensitivity
-- Drawing performance may degrade with 10+ concurrent users
+Drawings disappear if the server restarts (no database). Can't export or download. No zoom/pan. Touch pressure doesn't affect brush size. Gets slow with 10+ people drawing at once.
 
-## Technical Decisions
+## Why This Approach
 
-- **Native Canvas API**: No external drawing libraries (Fabric.js, Konva forbidden)
-- **Server as source of truth**: All drawing actions validated and stored server-side
-- **Event batching**: Drawing events batched every 16ms to reduce network traffic
-- **Dirty rectangle optimization**: Only redraw changed canvas regions for performance
+Used native Canvas API, no drawing libraries. Server keeps the source of truth for all drawing. Events get batched to reduce network traffic. Only redraw the parts of the canvas that changed. This keeps it fast even with multiple users.
 
 ## Time Spent
 
-- Initial setup & architecture: ~1.5 hours
-- Core drawing & sync: ~2.5 hours
-- Undo/redo & conflict handling: ~1.5 hours
-- User presence indicators: ~1 hour
-- Bug fixes & deployment: ~1 hour
-- **Total: ~7.5 hours**
+Initial setup - 1.5 hours. Core drawing and sync - 2.5 hours. Undo/redo - 1.5 hours. User cursors - 1 hour. Debugging and deployment - 1 hour. Total around 7.5 hours.
 
-## Deployment
-
-Frontend: Vercel (`https://letsdraw-ebon.vercel.app`)
-Backend: Render (`https://letsdraw.onrender.com`)
-
-## See Also
-
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Technical architecture & design decisions
-- [DEVELOPMENT.md](DEVELOPMENT.md) - Detailed development log
+Architecture details are in ARCHITECTURE.md.
