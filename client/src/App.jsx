@@ -347,20 +347,17 @@ function App() {
         socketService.on('Undo', (data) => {
           console.log('[App] Undo event received', data);
           
-          // Update undo/redo button states immediately
-          if (data.canUndo !== undefined) {
-            setCanUndo(data.canUndo);
-          }
-          if (data.canRedo !== undefined) {
-            setCanRedo(data.canRedo);
-          }
-          
-          // Re-render canvas from history
+          // Re-render canvas from history first
           if (data.history && drawingRef.current) {
             console.log('[App] Re-rendering canvas after undo with', data.history.length, 'actions');
             drawingRef.current.clearCanvas();
             drawingRef.current.renderFromHistory(data.history);
           }
+          
+          // Update undo/redo button states immediately
+          setCanUndo(data.canUndo || false);
+          setCanRedo(data.canRedo || false);
+          console.log(`[App] Undo response: canUndo=${data.canUndo}, canRedo=${data.canRedo}`);
           
           // Also handle via history manager for consistency
           if (historyManager.current) {
@@ -373,20 +370,17 @@ function App() {
         socketService.on('Redo', (data) => {
           console.log('[App] Redo event received', data);
           
-          // Update undo/redo button states immediately
-          if (data.canUndo !== undefined) {
-            setCanUndo(data.canUndo);
-          }
-          if (data.canRedo !== undefined) {
-            setCanRedo(data.canRedo);
-          }
-          
-          // Re-render canvas from history
+          // Re-render canvas from history first
           if (data.history && drawingRef.current) {
             console.log('[App] Re-rendering canvas after redo with', data.history.length, 'actions');
             drawingRef.current.clearCanvas();
             drawingRef.current.renderFromHistory(data.history);
           }
+          
+          // Update undo/redo button states immediately
+          setCanUndo(data.canUndo || false);
+          setCanRedo(data.canRedo || false);
+          console.log(`[App] Redo response: canUndo=${data.canUndo}, canRedo=${data.canRedo}`);
           
           // Also handle via history manager for consistency
           if (historyManager.current) {
@@ -404,12 +398,9 @@ function App() {
           }
           
           // Update undo/redo button states
-          if (data.canUndo !== undefined) {
-            setCanUndo(data.canUndo);
-          }
-          if (data.canRedo !== undefined) {
-            setCanRedo(data.canRedo);
-          }
+          setCanUndo(data.canUndo || false);
+          setCanRedo(data.canRedo || false);
+          console.log(`[App] Clear response: canUndo=${data.canUndo}, canRedo=${data.canRedo}`);
           
           setIsUndoRedoPending(false);
         });
