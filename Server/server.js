@@ -91,10 +91,11 @@ io.on('connection', (socket) => {
         canRedo: historyMetadata.canRedo || false,
       });
 
-      // Broadcast to others in room that new user joined
+      // Broadcast to others in room that new user joined with full user list
       socket.to(roomId).emit('user-joined', {
         userId: socket.id,
         user,
+        users: room.getUsers(), // Send full user list for sync
         totalUsers: room.getUserCount(),
       });
 
@@ -318,6 +319,43 @@ io.on('connection', (socket) => {
   });
 
   /**
+   * Handle room state sync request
+   * Allows clients to get current room state on-demand
+   * @event sync-room-state
+   */
+  socket.on('sync-room-state', (roomId, callback) => {
+    try {
+      const room = roomManager.getRoom(roomId);
+      
+      if (!room) {
+        if (typeof callback === 'function') {
+          callback({ success: false, error: 'Room not found' });
+        }
+        return;
+      }
+
+      const response = {
+        success: true,
+        roomId,
+        users: room.getUsers(),
+        totalUsers: room.getUserCount(),
+        timestamp: Date.now(),
+      };
+
+      console.log(`[Sync] Room state synced for ${roomId}: ${room.getUserCount()} users`);
+
+      if (typeof callback === 'function') {
+        callback(response);
+      }
+    } catch (error) {
+      console.error(`[Error] sync-room-state: ${error.message}`);
+      if (typeof callback === 'function') {
+        callback({ success: false, error: error.message });
+      }
+    }
+  });
+
+  /**
    * Handle user disconnect
    * @event disconnect
    */
@@ -331,9 +369,10 @@ io.on('connection', (socket) => {
 
         const room = roomManager.getRoom(roomId);
 
-        // Notify others in room
+        // Notify others in room with full user list
         io.to(roomId).emit('user-left', {
           userId: socket.id,
+          users: room ? room.getUsers() : [], // Send full user list for sync
           totalUsers: room ? room.getUserCount() : 0,
         });
 

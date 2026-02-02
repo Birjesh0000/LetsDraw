@@ -143,15 +143,24 @@ export class RoomManager {
 
   /**
    * Update users list when user joins
+   * Now receives full user list from server to ensure consistency
    */
-  handleUserJoined(userData) {
-    const existingIndex = this.users.findIndex((u) => u.id === userData.id);
-
-    if (existingIndex === -1) {
-      this.users.push(userData);
-      console.log(`[RoomManager] User joined: ${userData.name}`);
+  handleUserJoined(data) {
+    // If server sends full user list, use it directly (most reliable)
+    if (data.users && Array.isArray(data.users)) {
+      this.users = data.users;
+      console.log(`[RoomManager] User joined: ${data.user?.name || data.id} - synced user list (${this.users.length} total)`);
     } else {
-      console.log(`[RoomManager] User rejoined: ${userData.name}`);
+      // Fallback to local list management if server doesn't send full list
+      const userData = data.user || data;
+      const existingIndex = this.users.findIndex((u) => u.id === userData.id);
+
+      if (existingIndex === -1) {
+        this.users.push(userData);
+        console.log(`[RoomManager] User joined: ${userData.name}`);
+      } else {
+        console.log(`[RoomManager] User rejoined: ${userData.name}`);
+      }
     }
 
     if (this.callbacks.onUsersUpdated) {
@@ -161,18 +170,26 @@ export class RoomManager {
 
   /**
    * Update users list when user leaves
+   * Now receives full user list from server to ensure consistency
    */
-  handleUserLeft(userId) {
-    const userIndex = this.users.findIndex((u) => u.id === userId);
+  handleUserLeft(data) {
+    // If server sends full user list, use it directly (most reliable)
+    if (data.users && Array.isArray(data.users)) {
+      this.users = data.users;
+      console.log(`[RoomManager] User left - synced user list (${this.users.length} remaining)`);
+    } else {
+      // Fallback to local list management if server doesn't send full list
+      const userIndex = this.users.findIndex((u) => u.id === data.userId || u.id === data.id);
 
-    if (userIndex !== -1) {
-      const userName = this.users[userIndex].name;
-      this.users.splice(userIndex, 1);
-      console.log(`[RoomManager] User left: ${userName}`);
-
-      if (this.callbacks.onUsersUpdated) {
-        this.callbacks.onUsersUpdated(this.users);
+      if (userIndex !== -1) {
+        const userName = this.users[userIndex].name;
+        this.users.splice(userIndex, 1);
+        console.log(`[RoomManager] User left: ${userName}`);
       }
+    }
+
+    if (this.callbacks.onUsersUpdated) {
+      this.callbacks.onUsersUpdated(this.users);
     }
   }
 

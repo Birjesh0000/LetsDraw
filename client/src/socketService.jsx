@@ -47,6 +47,7 @@ class SocketService {
       onDisconnect: null,
       onError: null,
       onRoomJoined: null,
+      onRoomStateSync: null,
       onDraw: null,
       onUndo: null,
       onRedo: null,
@@ -469,6 +470,36 @@ class SocketService {
       userId: this.userId,
       isDrawing: isDrawing,
       timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Sync room state with server
+   * Useful for periodic updates to catch any out-of-sync state
+   */
+  syncRoomState(callback) {
+    if (!this.isConnected || !this.roomId || !this.socket) {
+      console.warn('[Socket] Not connected to room');
+      if (typeof callback === 'function') {
+        callback({ success: false, error: 'Not connected' });
+      }
+      return;
+    }
+
+    console.log('[Socket] Syncing room state...');
+    this.socket.emit('sync-room-state', this.roomId, (response) => {
+      console.log('[Socket] Room state synced:', response);
+      
+      // Trigger user list update if available
+      if (response && response.success && response.users) {
+        if (this.callbacks.onRoomStateSync) {
+          this.callbacks.onRoomStateSync(response);
+        }
+      }
+
+      if (typeof callback === 'function') {
+        callback(response);
+      }
     });
   }
 

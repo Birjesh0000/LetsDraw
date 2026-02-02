@@ -277,6 +277,14 @@ function App() {
           setIsJoiningRoom(false);
         });
 
+        // Handle room state sync responses
+        socketService.on('RoomStateSync', (data) => {
+          if (data && data.users) {
+            console.log(`[App] Room state synced: ${data.users.length} users`);
+            setUsers(data.users);
+          }
+        });
+
         // Setup socket callbacks for drawing and other events
         socketService.on('Connect', () => {
           setIsConnected(true);
@@ -489,6 +497,24 @@ function App() {
         if (joinSuccess) {
           console.log('[App] Successfully joined room');
           setIsJoiningRoom(false);
+
+          // Setup periodic room state sync (every 10 seconds) to catch any out-of-sync conditions
+          const syncInterval = setInterval(() => {
+            if (socketService.isConnected && roomManager.current) {
+              socketService.syncRoomState((response) => {
+                if (response && response.success && response.users) {
+                  // Update users if different from current
+                  if (response.users.length !== users.length) {
+                    console.log('[App] Room state sync detected user count change');
+                    setUsers(response.users);
+                  }
+                }
+              });
+            }
+          }, 10000); // 10 second sync interval
+
+          // Store interval ID for cleanup
+          roomManager.current.syncInterval = syncInterval;
         } else {
           console.error('[App] Failed to join room');
           setIsJoiningRoom(false);
@@ -503,6 +529,9 @@ function App() {
 
     // Cleanup on unmount
     return () => {
+      if (roomManager.current && roomManager.current.syncInterval) {
+        clearInterval(roomManager.current.syncInterval);
+      }
       if (userCursorManager.current) {
         userCursorManager.current.stopRendering();
         userCursorManager.current.clearAllCursors();
