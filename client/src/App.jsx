@@ -435,6 +435,17 @@ function App() {
           }
         });
 
+        // Handle user drawing state changes
+        socketService.on('DrawingStateChanged', (data) => {
+          if (userCursorManager.current && data.userId !== newUserId) {
+            const cursor = userCursorManager.current.getCursor(data.userId);
+            if (cursor) {
+              cursor.isDrawing = data.isDrawing;
+              console.log(`[App] User ${data.userId} drawing: ${data.isDrawing}`);
+            }
+          }
+        });
+
         // Start rendering user cursors after joining room
         const originalRoomCallback = roomManager.current.callbacks.onRoomJoined;
         roomManager.current.callbacks.onRoomJoined = (data) => {

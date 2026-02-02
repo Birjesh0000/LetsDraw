@@ -53,6 +53,7 @@ class SocketService {
       onClear: null,
       onUserJoined: null,
       onUserLeft: null,
+      onDrawingStateChanged: null,
       onReconnecting: null,
       onReconnectFailed: null,
       onErrorNotification: null,
@@ -292,6 +293,14 @@ class SocketService {
       }
     });
 
+    // User drawing state events
+    this.socket.on('user-drawing-state', (data) => {
+      console.log(`[Socket] User drawing state: ${data.userId} drawing=${data.isDrawing}`);
+      if (this.callbacks.onDrawingStateChanged) {
+        this.callbacks.onDrawingStateChanged(data);
+      }
+    });
+
     // User management events
     this.socket.on('user-joined', (data) => {
       console.log('[Socket] User joined:', data.userId);
@@ -443,6 +452,23 @@ class SocketService {
       if (ack && ack.error) {
         console.error('[Socket] Clear error:', ack.error);
       }
+    });
+  }
+
+  /**
+   * Send drawing state (is user currently drawing)
+   * @param {boolean} isDrawing - Whether user is currently drawing
+   */
+  sendDrawingState(isDrawing) {
+    if (!this.isConnected || !this.roomId || !this.socket) {
+      return;
+    }
+
+    this.socket.emit('drawing-state', {
+      roomId: this.roomId,
+      userId: this.userId,
+      isDrawing: isDrawing,
+      timestamp: Date.now(),
     });
   }
 

@@ -258,6 +258,38 @@ io.on('connection', (socket) => {
   });
 
   /**
+   * Handle drawing state change (user started/stopped drawing)
+   * @event drawing-state
+   */
+  socket.on('drawing-state', (data) => {
+    try {
+      const { roomId, userId, isDrawing } = data;
+
+      if (!roomId || !userId) {
+        console.warn('[DrawingState] Invalid drawing state data');
+        return;
+      }
+
+      const room = roomManager.getRoom(roomId);
+      if (!room) {
+        console.warn(`[DrawingState] Room ${roomId} not found`);
+        return;
+      }
+
+      // Broadcast drawing state to all users in room
+      io.to(roomId).emit('user-drawing-state', {
+        userId: userId,
+        isDrawing: isDrawing,
+        timestamp: data.timestamp || Date.now(),
+      });
+
+      console.log(`[DrawingState] User ${userId} drawing: ${isDrawing}`);
+    } catch (error) {
+      console.error(`[Error] drawing-state: ${error.message}`);
+    }
+  });
+
+  /**
    * Handle user disconnect
    * @event disconnect
    */

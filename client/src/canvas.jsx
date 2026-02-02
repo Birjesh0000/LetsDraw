@@ -163,6 +163,11 @@ class CanvasDrawing {
       points: [{ x, y }],
       startTime: Date.now(),
     };
+
+    // Notify that user started drawing
+    if (window.socketService) {
+      window.socketService.sendDrawingState(true);
+    }
   }
 
   /**
@@ -208,6 +213,16 @@ class CanvasDrawing {
       this.strokeBuffer.push(this.currentStroke);
 
       console.log(`[Canvas] Stroke completed: ${this.currentStroke.points.length} points`);
+    }
+
+    // Notify that user stopped drawing
+    if (window.socketService) {
+      window.socketService.sendDrawingState(false);
+    }
+
+    this.isStrokeInProgress = false;
+    this.currentStroke = null;
+  }
     }
 
     this.isStrokeInProgress = false;
