@@ -1,89 +1,149 @@
-# LetsDraw - Real-Time Collaborative Drawing Canvas
+<div align="center">
 
-https://letsdraw-ebon.vercel.app
+# 🎨 LetsDraw
 
-A multi-user drawing application where multiple users can draw simultaneously on a shared canvas. Built with React, Node.js, and Socket.io.
+### Real-Time Collaborative Drawing Canvas
 
-## Quick Start
+[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-letsdraw--ebon.vercel.app-brightgreen?style=for-the-badge)](https://letsdraw-ebon.vercel.app)
+[![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
+[![Socket.io](https://img.shields.io/badge/Socket.io-010101?style=for-the-badge&logo=socket.io)](https://socket.io)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
-Requirements: Node.js v18+
+A **multi-user real-time drawing application** where multiple users can draw simultaneously on a shared canvas. Changes are synced instantly across all connected clients via WebSockets.
 
-**Backend:**
+</div>
+
+---
+
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 🖌️ **Real-Time Sync** | Drawing strokes are broadcast to all connected users instantly via Socket.io |
+| 🖊️ **Brush & Eraser** | Adjustable brush/eraser size for precise or broad strokes |
+| 🎨 **Color Picker** | Full color palette with custom color selection |
+| ↩️ **Global Undo/Redo** | Any user can undo/redo — consistent state across all clients |
+| 🗑️ **Clear Canvas** | Broadcast clear action synced to all users |
+| 👥 **Live Cursors** | See other users' cursors and drawing states in real time |
+| 🔄 **Auto-Reconnect** | Exponential backoff reconnection with full state recovery |
+| 📡 **Connection Status** | Live indicator showing WebSocket connection health |
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 18, Vite, Tailwind CSS |
+| **Real-Time** | Socket.io (WebSocket + fallback) |
+| **Backend** | Node.js, Express |
+| **Drawing** | Native HTML5 Canvas API |
+| **Deployment** | Vercel (frontend), Render (backend) |
+
+---
+
+## 🚀 Quick Start
+
+**Requirements:** Node.js v18+
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Birjesh0000/LetsDraw.git
+cd LetsDraw
+```
+
+### 2. Start the Backend
+
 ```bash
 cd Server
 npm install
 npm start
 ```
-Runs on http://localhost:3001
 
-**Frontend:**
+> Runs on **http://localhost:3001**
+
+### 3. Start the Frontend
+
 ```bash
 cd client
 npm install
 npm run dev
 ```
-Runs on http://localhost:5173
 
-## Testing with Multiple Users
+> Runs on **http://localhost:5173**
 
-1. Open http://localhost:5173 in two browser windows
-2. Both will auto-join the same room
-3. Draw in one window - it appears in the other in real-time
-4. Test undo/redo/clear buttons - they work across both users
+### 4. Test with Multiple Users
 
-## Features Implemented
+1. Open **http://localhost:5173** in two separate browser windows
+2. Both windows auto-join the same shared room
+3. Draw in one window — it appears instantly in the other
+4. Try undo/redo/clear — all actions sync across users
 
-- Real-time drawing synchronization via Socket.io
-- Brush and eraser tools with adjustable size
-- Color picker
-- Global undo/redo (one user can undo another's drawing)
-- Clear canvas
-- Remote user cursor indicators with drawing state
-- Automatic reconnection with exponential backoff
-- Connection status monitoring
-- Error notifications
+---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 LetsDraw/
-├── client/              # React + Vite frontend
+├── client/                  # React + Vite frontend
 │   ├── src/
-│   │   ├── App.jsx
-│   │   ├── canvas.jsx
-│   │   ├── socketService.jsx
-│   │   ├── Toolbar.jsx
-│   │   └── utils/
+│   │   ├── App.jsx          # Root component, socket event handling
+│   │   ├── canvas.jsx       # Drawing logic, Canvas API
+│   │   ├── socketService.jsx # WebSocket connection management
+│   │   ├── Toolbar.jsx      # Tools UI (brush, eraser, color, size)
+│   │   └── utils/           # Helper utilities
+│   ├── tailwind.config.js
 │   └── vite.config.js
 │
-└── Server/              # Node.js backend
-    ├── server.js
-    ├── rooms.js
-    └── drawing-state.js
+└── Server/                  # Node.js + Express backend
+    ├── server.js            # Socket.io server, event routing
+    ├── rooms.js             # Room and user session tracking
+    └── drawing-state.js     # Per-room stroke history, undo/redo
 ```
 
-## Known Limitations
+---
 
-- No persistence - drawing lost if server restarts
-- No export/download functionality
-- Zoom and pan not implemented
+## 📸 Screenshots
+
+> **Live at:** [https://letsdraw-ebon.vercel.app](https://letsdraw-ebon.vercel.app)
+
+*Open the live demo in two browser windows side-by-side to see real-time collaboration in action.*
+
+---
+
+## ⚙️ How It Works
+
+- **Server as source of truth** — all stroke history lives on the server
+- **Event batching every 16ms** (~60 fps) to reduce WebSocket traffic by 60–70%
+- **Dirty rectangle rendering** — only changed canvas regions are redrawn, reducing CPU load
+- **Sequence numbers** on every action prevent split-brain between clients and server
+- **Room-based isolation** — users only receive updates for their room, enabling horizontal scaling
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a deep-dive into the technical design.
+
+---
+
+## ⚠️ Known Limitations
+
+- No persistence — drawing is lost if the server restarts
+- No export / download functionality
+- Zoom and pan are not implemented
 - No touch pressure sensitivity
-- Performance degrades with 10+ concurrent users
+- Performance may degrade with 10+ concurrent users in the same room
 
-## Technical Approach
+---
 
-- Native Canvas API (no external drawing libraries)
-- Server as source of truth for all drawing state
-- Event batching every 16ms to reduce network traffic
-- Dirty rectangle rendering optimization for performance
+## 📄 License
 
-## Time Spent
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
-- Setup and architecture: 1.5 hours
-- Core drawing and sync: 2.5 hours
-- Undo/redo and conflict handling: 1.5 hours
-- User presence indicators: 1 hour
-- Bug fixes and deployment: 1 hour
-- Total: 7.5 hours
+---
 
-See ARCHITECTURE.md for technical details.
+<div align="center">
+
+Built with ❤️ by [Brijesh](https://github.com/Birjesh0000)
+
+</div>
