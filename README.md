@@ -1,8 +1,16 @@
-# LetsDraw - Real-Time Collaborative Drawing Canvas
+# LetsDraw — Real-Time Collaborative Drawing Canvas
 
-https://letsdraw-ebon.vercel.app
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-letsdraw--ebon.vercel.app-brightgreen?style=flat-square&logo=vercel)](https://letsdraw-ebon.vercel.app)
+[![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB)](https://reactjs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Socket.io](https://img.shields.io/badge/Socket.io-010101?style=flat-square&logo=socket.io&logoColor=white)](https://socket.io)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
 
-A multi-user drawing application where multiple users can draw simultaneously on a shared canvas. Built with React, Node.js, and Socket.io.
+> A multi-user drawing application where multiple users can draw simultaneously on a shared canvas, with real-time synchronization powered by WebSockets.
+
+<!-- Add a screenshot here once available:
+![LetsDraw Screenshot](./assets/screenshot.png)
+-->
 
 ## Quick Start
 
