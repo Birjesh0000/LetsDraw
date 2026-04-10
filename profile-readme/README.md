@@ -1,6 +1,7 @@
 <h1 align="center">Hi, I'm Birjesh 👋</h1>
 <h3 align="center">Full-Stack Developer | Fresher SDE | React · Node.js · MongoDB</h3>
 
+<!-- STEP 1: Replace YOUR_LINKEDIN, YOUR_EMAIL@gmail.com, and YOUR_PORTFOLIO_LINK below with your real values before publishing -->
 <p align="center">
   <a href="https://www.linkedin.com/in/YOUR_LINKEDIN" target="_blank">
     <img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"/>
@@ -12,6 +13,7 @@
     <img src="https://img.shields.io/badge/Portfolio-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Portfolio"/>
   </a>
 </p>
+<!-- END STEP 1 -->
 
 ---
 
@@ -62,6 +64,7 @@
 > A platform connecting citizens with recycling centres to promote sustainable waste management.
 
 - **Stack:** React · Node.js · Express · MongoDB · Tailwind CSS
+<!-- Replace the demo link below, or remove "| [Live Demo](...)" if no live deployment exists -->
 - 🔗 [Repository](https://github.com/Birjesh0000/RecycleHub) | [Live Demo](https://YOUR_RECYCLEHUB_DEMO_LINK)
 
 ---
@@ -70,6 +73,7 @@
 > An ed-tech web application bridging students and educators with course content, quizzes, and progress tracking.
 
 - **Stack:** React · Node.js · Express · MongoDB · Tailwind CSS
+<!-- Replace the demo link below, or remove "| [Live Demo](...)" if no live deployment exists -->
 - 🔗 [Repository](https://github.com/Birjesh0000/VidyaSetu) | [Live Demo](https://YOUR_VIDYASETU_DEMO_LINK)
 
 ---
@@ -105,7 +109,8 @@
 
 ## 🏆 Achievements & Highlights
 
-- 🥇 Solved **[X]+ DSA problems** on LeetCode / Codeforces (replace X with your actual count)
+- 🥇 Solved **500+** DSA problems on LeetCode / Codeforces
+<!-- Update the number above with your actual count before publishing -->
 - 🎓 Completed full-stack MERN bootcamp / coursework
 - 🚀 Deployed production apps used by real users
 
